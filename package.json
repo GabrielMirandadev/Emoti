@@ -1,0 +1,17 @@
+{
+  "name": "emoti-familia-demo",
+  "version": "3.0.0",
+  "private": true,
+  "description": "EMOTI demo app for children and families with MySQL/PostgreSQL",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@dataconnect/generated": "file:src/dataconnect-generated",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "mysql2": "^3.14.3",
+    "pg": "^8.16.3"
+  }
+}

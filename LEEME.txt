@@ -1,0 +1,47 @@
+EMOTI FAMILIA — DEMO v3
+========================
+
+Esta versión incorpora una base de datos real mediante un backend Node.js y permite elegir PostgreSQL o MySQL.
+
+FUNCIONES
+- Modo niño 5–10 años.
+- Selección de distintos niños.
+- Registro de emoción e intensidad 1–5.
+- Texto libre.
+- Grabación de audio y almacenamiento del archivo en /uploads.
+- Consejo de regulación.
+- Familias con múltiples niños.
+- Panel de familia con historial y audio.
+- Pantalla de configuración para crear familias y niños.
+- API REST.
+
+REQUISITOS
+- Node.js 18+ recomendado.
+- PostgreSQL 13+ O MySQL 8+.
+
+POSTGRESQL
+1. Crear base de datos: emoti
+2. Copiar .env.example a .env y configurar DATABASE_URL.
+3. npm install
+4. npm start
+5. Abrir http://localhost:3000
+
+MYSQL
+1. Crear base de datos: emoti
+2. En .env usar DB_TYPE=mysql y configurar MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE.
+3. npm install
+4. npm start
+5. Abrir http://localhost:3000
+
+La aplicación crea las tablas automáticamente al iniciar.
+
+TABLAS
+families
+children
+emotion_records
+
+NOTA DE DEMOSTRACIÓN
+Esta app está pensada para una feria/prototipo. No uses nombres reales, correos reales ni grabaciones reales de niños. Para producción habría que agregar autenticación real, autorización padre/niño, contraseñas/PIN almacenados con hash, HTTPS, gestión segura de audios, cifrado, backups, auditoría, consentimiento y políticas de privacidad aplicables a datos de menores.
+
+AUDIO
+Los audios se guardan como archivos en la carpeta uploads y la base de datos guarda la ruta. Para producción conviene usar almacenamiento privado tipo S3/Blob y URLs temporales, no una carpeta pública.
