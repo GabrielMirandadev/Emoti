@@ -17,75 +17,1626 @@
   <section id="setup" class="hidden"><div class="card"><h2>Configurar demo</h2><p class="sub">Primero crea una familia y después agrega uno o más niños. Esta pantalla reemplaza los datos de prueba fijos.</p><div class="sectionTitle">Nueva familia</div><div class="row"><div class="field"><label>Nombre de familia</label><input id="fname" placeholder="Familia Pérez"></div><div class="field"><label>Adulto responsable</label><input id="pname" placeholder="María Pérez"></div></div><div class="field"><label>Email (demo)</label><input id="pemail" type="email" placeholder="familia@email.com"></div><div class="field"><label>PIN del panel</label><input id="fpin" value="1234" maxlength="20"></div><button class="primary" id="createFamily">Crear familia</button><div class="sectionTitle">Agregar niño</div><div class="field"><label>Familia</label><select id="setupFamily"></select></div><div class="row"><div class="field"><label>Nombre del niño</label><input id="cname" placeholder="Sofía"></div><div class="field"><label>Año de nacimiento</label><input id="cyear" type="number" min="2010" max="2026" placeholder="2018"></div></div><div class="field"><label>Avatar</label><select id="avatar"><option>🧒</option><option>👧</option><option>👦</option><option>🦄</option><option>🐼</option></select></div><button class="primary" id="createChild">Agregar niño</button><div class="sectionTitle">Familias existentes</div><div id="familiesList"></div></div></section>
   </div><div id="toast" class="toast hidden"></div>
   <script>
-  const API='/api';let families=[],selectedFamily=Number(localStorage.getItem('emoti_selected_family'))||null,selectedChild=Number(localStorage.getItem('emoti_selected_child'))||null,state={emotion:null,intensity:null,audio:null,blob:null};let recorder=null,chunks=[],familyRefreshTimer=null;
-  const E=[['feliz','😊','Feliz','alegre, contento'],['triste','😢','Triste','con pena'],['enojo','😠','Enojado','con rabia, molesto'],['miedo','😨','Miedo','asustado'],['nervioso','😟','Nervioso','preocupado, ansioso']];
-  const A={feliz:['¡Qué alegría!','Tu alegría también merece ser escuchada.','Piensa en qué hizo especial este momento y compártelo con alguien.'],triste:['Puedes estar triste','No tienes que esconder una pena.','Busca un abrazo y cuéntale a alguien qué pasó.'],enojo:['Tu enojo tiene algo que decir','Puede aparecer cuando algo nos molesta o parece injusto.','Respira, aléjate si es seguro y después explica qué necesitas.'],miedo:['El miedo intenta cuidarte','Primero revisa si estás seguro ahora.','Busca a un adulto de confianza y cuéntale qué te asusta.'],nervioso:['Vamos más despacio','Tu mente puede ir muy rápido cuando estás ansioso.','Pon los pies en el suelo y respira entrando en 4 y soltando en 6.']};
-  const $=id=>document.getElementById(id);function toast(t){$('toast').textContent=t;$('toast').classList.remove('hidden');setTimeout(()=>$('toast').classList.add('hidden'),2200)}
-  async function api(url,opt={}){const r=await fetch(API+url,opt);const d=await r.json();if(!r.ok)throw Error(d.error||'Error');return d}
-  function show(s){['child','family','setup'].forEach(x=>$(x).classList.add('hidden'));$(s).classList.remove('hidden');document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));({child:'nChild',family:'nFamily',setup:'nSetup'})[s]&&$(({child:'nChild',family:'nFamily',setup:'nSetup'})[s]).classList.add('active')}
-  $('nChild').onclick=()=>{show('child');loadFamilies()};$('nFamily').onclick=()=>{show('family');loadFamilies();startFamilyRefresh()};$('nSetup').onclick=()=>{show('setup');loadFamilies();stopFamilyRefresh()};
-  function buildEmotions(){E.forEach(e=>{let b=document.createElement('button');b.className='emotion';b.innerHTML=`<div class="face">${e[1]}</div>${e[2]}<div class="mut">${e[3]}</div>`;b.onclick=()=>{state.emotion=e[0];document.querySelectorAll('.emotion').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');$('intensityBox').classList.remove('hidden');$('adviceBox').classList.add('hidden')};$('emotions').appendChild(b)});for(let i=1;i<=5;i++){let b=document.createElement('button');b.className='level';b.textContent=i;b.onclick=()=>{state.intensity=i;document.querySelectorAll('.level').forEach(x=>x.classList.remove('selected'));b.classList.add('selected')};$('levels').appendChild(b)}}buildEmotions();
-  $('childSelect').onchange=()=>{selectedChild=Number($('childSelect').value)||null;localStorage.setItem('emoti_selected_child',selectedChild||'');const opt=$('childSelect').selectedOptions[0];const fid=Number(opt?.dataset.familyId)||null;if(fid){selectedFamily=fid;localStorage.setItem('emoti_selected_family',String(fid));} $('childFlow').classList.toggle('hidden',!selectedChild)};
-  $('record').onclick=async()=>{if(recorder?.state==='recording'){recorder.stop();return}try{let stream=await navigator.mediaDevices.getUserMedia({audio:true});chunks=[];recorder=new MediaRecorder(stream);recorder.ondataavailable=e=>chunks.push(e.data);recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());const mimeType=recorder.mimeType||chunks.find(x=>x.type)?.type||'audio/webm';state.blob=new Blob(chunks,{type:mimeType});$('preview').src=URL.createObjectURL(state.blob);$('preview').classList.remove('hidden');$('record').textContent='🎙️ Grabar de nuevo';$('recordStatus').textContent='Grabación lista.'};recorder.start();$('record').textContent='⏹️ Detener';$('recordStatus').textContent='Grabando…';setTimeout(()=>{if(recorder?.state==='recording')recorder.stop()},60000)}catch(e){$('recordStatus').textContent='No se pudo acceder al micrófono.'}};
-  $('advice').onclick=()=>{if(!state.emotion||!state.intensity){toast('Elige emoción e intensidad primero.');return}let e=E.find(x=>x[0]===state.emotion),a=A[state.emotion];$('adviceEmoji').textContent=e[1];$('adviceTitle').textContent=a[0];$('adviceText').textContent=a[1];$('adviceTip').textContent='💡 '+a[2];$('adviceBox').classList.remove('hidden')};
-  $('save').onclick=async()=>{if(!selectedChild||!state.emotion||!state.intensity)return toast('Completa la emoción primero.');let fd=new FormData();fd.append('childId',selectedChild);fd.append('emotion',state.emotion);fd.append('intensity',state.intensity);fd.append('story',$('story').value.trim());if(state.blob){const ext=state.blob.type.includes('mp4')?'m4a':state.blob.type.includes('ogg')?'ogg':'webm';fd.append('audio',state.blob,'emoti-'+Date.now()+'.'+ext);}try{await api('/emotions',{method:'POST',body:fd});toast('✓ ¡Emoción guardada en la base de datos!');$('story').value='';state={emotion:null,intensity:null,audio:null,blob:null};$('preview').classList.add('hidden');$('adviceBox').classList.add('hidden');$('intensityBox').classList.add('hidden');document.querySelectorAll('.emotion,.level').forEach(x=>x.classList.remove('selected'));if(selectedFamily){await refreshFamilyData(false)}}catch(e){toast('No se pudo guardar: '+e.message)}};
-  async function loadFamilies(){
-    try{
-      families=await api('/families');
-      const validFamily=families.some(f=>Number(f.id)===Number(selectedFamily));
-      if(!validFamily) selectedFamily=null;
-      const opts='<option value="">Selecciona una familia</option>'+families.map(f=>`<option value="${f.id}">${f.name} · ${f.parent_name}</option>`).join('');
-      $('familySelect').innerHTML=opts;$('setupFamily').innerHTML=opts;
-      if(selectedFamily){$('familySelect').value=String(selectedFamily);$('setupFamily').value=String(selectedFamily)}
-      $('familiesList').innerHTML=families.map(f=>`<div class="listItem"><b>${escapeHtml(f.name)}</b><div class="mut">Adulto: ${escapeHtml(f.parent_name)}${f.parent_email?' · '+escapeHtml(f.parent_email):''}</div></div>`).join('')||'<div class="mut">Aún no hay familias.</div>';
-      let childOpts='<option value="">Selecciona un niño</option>';
-      for(const f of families){
-        let cs=await api('/families/'+f.id+'/children');
-        childOpts+=cs.map(c=>`<option data-family-id="${f.id}" value="${c.id}">${c.avatar||'🧒'} ${escapeHtml(c.name)} · ${escapeHtml(f.name)}</option>`).join('')
+    const API = '/api';
+    
+    let families = [];
+    
+    let selectedFamily =
+      Number(localStorage.getItem('emoti_selected_family')) || null;
+    
+    let selectedChild =
+      Number(localStorage.getItem('emoti_selected_child')) || null;
+    
+    let state = {
+      emotion: null,
+      intensity: null,
+      audio: null,
+      blob: null
+    };
+    
+    let recorder = null;
+    let chunks = [];
+    let familyRefreshTimer = null;
+    
+    
+    /* =========================================================
+       EMOCIONES
+    ========================================================= */
+    
+    const E = [
+      ['feliz', '😊', 'Feliz', 'alegre, contento'],
+      ['triste', '😢', 'Triste', 'con pena'],
+      ['enojo', '😠', 'Enojado', 'con rabia, molesto'],
+      ['miedo', '😨', 'Miedo', 'asustado'],
+      ['nervioso', '😟', 'Nervioso', 'preocupado, ansioso']
+    ];
+    
+    
+    const A = {
+    
+      feliz: [
+        '¡Qué alegría!',
+        'Tu alegría también merece ser escuchada.',
+        'Piensa en qué hizo especial este momento y compártelo con alguien.'
+      ],
+    
+      triste: [
+        'Puedes estar triste',
+        'No tienes que esconder una pena.',
+        'Busca un abrazo y cuéntale a alguien qué pasó.'
+      ],
+    
+      enojo: [
+        'Tu enojo tiene algo que decir',
+        'Puede aparecer cuando algo nos molesta o parece injusto.',
+        'Respira, aléjate si es seguro y después explica qué necesitas.'
+      ],
+    
+      miedo: [
+        'El miedo intenta cuidarte',
+        'Primero revisa si estás seguro ahora.',
+        'Busca a un adulto de confianza y cuéntale qué te asusta.'
+      ],
+    
+      nervioso: [
+        'Vamos más despacio',
+        'Tu mente puede ir muy rápido cuando estás ansioso.',
+        'Pon los pies en el suelo y respira entrando en 4 y soltando en 6.'
+      ]
+    
+    };
+    
+    
+    /* =========================================================
+       UTILIDADES
+    ========================================================= */
+    
+    const $ = id => document.getElementById(id);
+    
+    
+    function toast(text) {
+    
+      $('toast').textContent = text;
+    
+      $('toast').classList.remove('hidden');
+    
+      setTimeout(() => {
+        $('toast').classList.add('hidden');
+      }, 2200);
+    
+    }
+    
+    
+    async function api(url, options = {}) {
+    
+      const response = await fetch(API + url, options);
+    
+      const data = await response.json();
+    
+      if (!response.ok) {
+        throw new Error(data.error || 'Error');
       }
-      $('childSelect').innerHTML=childOpts;
-      if(selectedChild && [...$('childSelect').options].some(o=>Number(o.value)===Number(selectedChild))) $('childSelect').value=String(selectedChild); else selectedChild=null;
-      $('childFlow').classList.toggle('hidden',!selectedChild);
-      if(selectedChild) localStorage.setItem('emoti_selected_child',String(selectedChild));
-      if(selectedFamily){await refreshFamilyData(false)} else {$('familySummary').classList.add('hidden');$('selectedFamilyBadge').classList.add('hidden')}
-    }catch(e){toast('No hay conexión con el servidor o la base de datos.')}
-  }
-  
-  async function refreshFamilyData(showToast=true){
-    if(!selectedFamily)return;
-    try{
-      const [cs,rs]=await Promise.all([api('/families/'+selectedFamily+'/children'),api('/families/'+selectedFamily+'/emotions')]);
-      const fam=families.find(f=>Number(f.id)===Number(selectedFamily));
-      if(fam){$('selectedFamilyBadge').textContent='🏠 Familia: '+fam.name;$('selectedFamilyBadge').classList.remove('hidden')}
-      $('familySummary').classList.remove('hidden');
-      $('fc').textContent=cs.length;$('fr').textContent=rs.length;$('fa').textContent=rs.filter(x=>x.has_audio||x.audio_path).length;
-      $('childrenList').innerHTML=cs.map(c=>`<span class="chip">${c.avatar||'🧒'} ${escapeHtml(c.name)}</span>`).join(' ')||'<span class="mut">Sin niños</span>';
-      $('history').innerHTML=rs.map(r=>{
-        let e=E.find(x=>x[0]===r.emotion); let d=new Date(r.created_at);
-        let date=d.toLocaleDateString('es-CL',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}); date=date.charAt(0).toUpperCase()+date.slice(1);
-        let time=d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
-        return `<div class="listItem"><div class="listHead"><div class="big">${e?e[1]:'🙂'}</div><div class="grow"><div class="historyDate">${date}</div><div class="historyTime">${time}</div><div class="historySentence">${escapeHtml(r.child_name)} se siente ${e?escapeHtml(e[2].toLowerCase()):escapeHtml(r.emotion)}</div><div class="historyEmotion">Intensidad ${r.intensity}/5</div></div></div>${r.story?`<div class="detail">${escapeHtml(r.story)}</div>`:''}${(r.has_audio||r.audio_path)?`<audio class="audio" controls preload="metadata" src="${r.has_audio?'/api/emotions/'+r.id+'/audio':r.audio_path}"></audio>`:''}</div>`
-      }).join('')||'<div class="mut">Aún no hay registros para esta familia.</div>';
-      if(showToast)toast('✓ Historial actualizado');
-    }catch(e){console.error(e)}
-  }
-  
-  function startFamilyRefresh(){
-    stopFamilyRefresh();
-    if(selectedFamily) refreshFamilyData(false);
-    familyRefreshTimer=setInterval(()=>{if(!$('family').classList.contains('hidden')&&selectedFamily)refreshFamilyData(false)},3000);
-  }
-  function stopFamilyRefresh(){if(familyRefreshTimer){clearInterval(familyRefreshTimer);familyRefreshTimer=null}}
-  
-  $('createFamily').onclick=async()=>{try{await api('/families',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('fname').value,parentName:$('pname').value,parentEmail:$('pemail').value,pin:$('fpin').value||'1234'})});toast('✓ Familia creada');$('fname').value='';$('pname').value='';$('pemail').value='';await loadFamilies()}catch(e){toast(e.message)}};
-  $('createChild').onclick=async()=>{try{await api('/children',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({familyId:Number($('setupFamily').value),name:$('cname').value,birthYear:Number($('cyear').value)||null,avatar:$('avatar').value})});toast('✓ Niño agregado');selectedFamily=Number($('setupFamily').value)||selectedFamily;if(selectedFamily)localStorage.setItem('emoti_selected_family',String(selectedFamily));$('cname').value='';$('cyear').value='';await loadFamilies()}catch(e){toast(e.message)}};
-  $('familySelect').onchange=async()=>{
-    selectedFamily=Number($('familySelect').value)||null;
-    if(selectedFamily){localStorage.setItem('emoti_selected_family',String(selectedFamily));$('setupFamily').value=String(selectedFamily);}
-    else {localStorage.removeItem('emoti_selected_family');$('familySummary').classList.add('hidden');$('selectedFamilyBadge').classList.add('hidden');return}
-    await refreshFamilyData(true);startFamilyRefresh();
-  };
-  function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-  loadFamilies();
-  </script></body></html>
+    
+      return data;
+    
+    }
+    
+    
+    function escapeHtml(value) {
+    
+      if (value === null || value === undefined) {
+        return '';
+      }
+    
+      return String(value).replace(
+        /[&<>"']/g,
+        char => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#039;'
+        }[char])
+      );
+    
+    }
+    
+    
+    /* =========================================================
+       NAVEGACIÓN
+    ========================================================= */
+    
+    function show(section) {
+    
+      ['child', 'family', 'setup'].forEach(id => {
+        $(id).classList.add('hidden');
+      });
+    
+      $(section).classList.remove('hidden');
+    
+      document
+        .querySelectorAll('.nav button')
+        .forEach(button => button.classList.remove('active'));
+    
+    
+      const navMap = {
+        child: 'nChild',
+        family: 'nFamily',
+        setup: 'nSetup'
+      };
+    
+      if (navMap[section]) {
+        $(navMap[section]).classList.add('active');
+      }
+    
+    }
+    
+    
+    $('nChild').onclick = async () => {
+    
+      stopFamilyRefresh();
+    
+      show('child');
+    
+      await loadFamilies();
+    
+    };
+    
+    
+    $('nFamily').onclick = async () => {
+    
+      show('family');
+    
+      await loadFamilies();
+    
+      startFamilyRefresh();
+    
+    };
+    
+    
+    $('nSetup').onclick = async () => {
+    
+      stopFamilyRefresh();
+    
+      show('setup');
+    
+      await loadFamilies();
+    
+    };
+    
+    
+    /* =========================================================
+       CREAR BOTONES DE EMOCIONES
+    ========================================================= */
+    
+    function buildEmotions() {
+    
+      E.forEach(emotion => {
+    
+        const button = document.createElement('button');
+    
+        button.className = 'emotion';
+    
+        button.innerHTML = `
+          <div class="face">${emotion[1]}</div>
+          ${emotion[2]}
+          <div class="mut">${emotion[3]}</div>
+        `;
+    
+        button.onclick = () => {
+    
+          state.emotion = emotion[0];
+    
+          document
+            .querySelectorAll('.emotion')
+            .forEach(item => item.classList.remove('selected'));
+    
+          button.classList.add('selected');
+    
+          $('intensityBox').classList.remove('hidden');
+    
+          $('adviceBox').classList.add('hidden');
+    
+        };
+    
+        $('emotions').appendChild(button);
+    
+      });
+    
+    
+      for (let i = 1; i <= 5; i++) {
+    
+        const button = document.createElement('button');
+    
+        button.className = 'level';
+    
+        button.textContent = i;
+    
+        button.onclick = () => {
+    
+          state.intensity = i;
+    
+          document
+            .querySelectorAll('.level')
+            .forEach(item => item.classList.remove('selected'));
+    
+          button.classList.add('selected');
+    
+        };
+    
+        $('levels').appendChild(button);
+    
+      }
+    
+    }
+    
+    
+    buildEmotions();
+    
+    
+    /* =========================================================
+       SELECCIÓN DEL NIÑO
+    ========================================================= */
+    
+    $('childSelect').onchange = () => {
+    
+      selectedChild =
+        Number($('childSelect').value) || null;
+    
+      if (selectedChild) {
+    
+        localStorage.setItem(
+          'emoti_selected_child',
+          String(selectedChild)
+        );
+    
+      } else {
+    
+        localStorage.removeItem(
+          'emoti_selected_child'
+        );
+    
+      }
+    
+    
+      const option =
+        $('childSelect').selectedOptions[0];
+    
+      const familyId =
+        Number(option?.dataset.familyId) || null;
+    
+    
+      if (familyId) {
+    
+        selectedFamily = familyId;
+    
+        localStorage.setItem(
+          'emoti_selected_family',
+          String(familyId)
+        );
+    
+      }
+    
+    
+      $('childFlow')
+        .classList
+        .toggle(
+          'hidden',
+          !selectedChild
+        );
+    
+    };
+    
+    
+    /* =========================================================
+       GRABACIÓN DE AUDIO
+    ========================================================= */
+    
+    $('record').onclick = async () => {
+    
+      /*
+        Si ya estamos grabando,
+        el mismo botón detiene la grabación.
+      */
+    
+      if (
+        recorder &&
+        recorder.state === 'recording'
+      ) {
+    
+        recorder.stop();
+    
+        return;
+    
+      }
+    
+    
+      try {
+    
+        const stream =
+          await navigator.mediaDevices.getUserMedia({
+            audio: true
+          });
+    
+    
+        chunks = [];
+    
+    
+        /*
+          Elegimos el mejor formato compatible
+          con el navegador.
+        */
+    
+        let options = {};
+    
+    
+        if (
+          MediaRecorder.isTypeSupported(
+            'audio/webm;codecs=opus'
+          )
+        ) {
+    
+          options.mimeType =
+            'audio/webm;codecs=opus';
+    
+        }
+    
+        else if (
+          MediaRecorder.isTypeSupported(
+            'audio/mp4'
+          )
+        ) {
+    
+          options.mimeType =
+            'audio/mp4';
+    
+        }
+    
+        else if (
+          MediaRecorder.isTypeSupported(
+            'audio/webm'
+          )
+        ) {
+    
+          options.mimeType =
+            'audio/webm';
+    
+        }
+    
+    
+        recorder =
+          new MediaRecorder(
+            stream,
+            options
+          );
+    
+    
+        recorder.ondataavailable = event => {
+    
+          if (
+            event.data &&
+            event.data.size > 0
+          ) {
+    
+            chunks.push(event.data);
+    
+          }
+    
+        };
+    
+    
+        recorder.onstop = () => {
+    
+          stream
+            .getTracks()
+            .forEach(track => track.stop());
+    
+    
+          const mimeType =
+            recorder.mimeType ||
+            chunks[0]?.type ||
+            'audio/webm';
+    
+    
+          state.blob =
+            new Blob(
+              chunks,
+              {
+                type: mimeType
+              }
+            );
+    
+    
+          const previewUrl =
+            URL.createObjectURL(
+              state.blob
+            );
+    
+    
+          $('preview').src =
+            previewUrl;
+    
+    
+          $('preview')
+            .classList
+            .remove('hidden');
+    
+    
+          $('record').textContent =
+            '🎙️ Grabar de nuevo';
+    
+    
+          $('recordStatus').textContent =
+            `Grabación lista · ${
+              (state.blob.size / 1024).toFixed(1)
+            } KB`;
+    
+        };
+    
+    
+        /*
+          Creamos fragmentos cada 250ms.
+          Es más confiable entre navegadores.
+        */
+    
+        recorder.start(250);
+    
+    
+        $('record').textContent =
+          '⏹️ Detener';
+    
+    
+        $('recordStatus').textContent =
+          'Grabando…';
+    
+    
+        /*
+          Máximo 60 segundos.
+        */
+    
+        setTimeout(() => {
+    
+          if (
+            recorder &&
+            recorder.state === 'recording'
+          ) {
+    
+            recorder.stop();
+    
+          }
+    
+        }, 60000);
+    
+    
+      }
+    
+      catch (error) {
+    
+        console.error(
+          'Error de micrófono:',
+          error
+        );
+    
+    
+        $('recordStatus').textContent =
+          'No se pudo acceder al micrófono.';
+    
+      }
+    
+    };
+    
+    
+    /* =========================================================
+       CONSEJO EMOCIONAL
+    ========================================================= */
+    
+    $('advice').onclick = () => {
+    
+      if (
+        !state.emotion ||
+        !state.intensity
+      ) {
+    
+        toast(
+          'Elige emoción e intensidad primero.'
+        );
+    
+        return;
+    
+      }
+    
+    
+      const emotion =
+        E.find(
+          item =>
+            item[0] === state.emotion
+        );
+    
+    
+      const advice =
+        A[state.emotion];
+    
+    
+      $('adviceEmoji').textContent =
+        emotion[1];
+    
+    
+      $('adviceTitle').textContent =
+        advice[0];
+    
+    
+      $('adviceText').textContent =
+        advice[1];
+    
+    
+      $('adviceTip').textContent =
+        '💡 ' + advice[2];
+    
+    
+      $('adviceBox')
+        .classList
+        .remove('hidden');
+    
+    };
+    
+    
+    /* =========================================================
+       GUARDAR EMOCIÓN
+    ========================================================= */
+    
+    $('save').onclick = async () => {
+    
+      if (
+        !selectedChild ||
+        !state.emotion ||
+        !state.intensity
+      ) {
+    
+        return toast(
+          'Completa la emoción primero.'
+        );
+    
+      }
+    
+    
+      const formData =
+        new FormData();
+    
+    
+      formData.append(
+        'childId',
+        selectedChild
+      );
+    
+    
+      formData.append(
+        'emotion',
+        state.emotion
+      );
+    
+    
+      formData.append(
+        'intensity',
+        state.intensity
+      );
+    
+    
+      formData.append(
+        'story',
+        $('story').value.trim()
+      );
+    
+    
+      /*
+        AUDIO
+      */
+    
+      if (state.blob) {
+    
+        let extension = 'webm';
+    
+    
+        if (
+          state.blob.type.includes('mp4')
+        ) {
+    
+          extension = 'm4a';
+    
+        }
+    
+        else if (
+          state.blob.type.includes('ogg')
+        ) {
+    
+          extension = 'ogg';
+    
+        }
+    
+    
+        formData.append(
+          'audio',
+          state.blob,
+          `emoti-${Date.now()}.${extension}`
+        );
+    
+      }
+    
+    
+      try {
+    
+        await api(
+          '/emotions',
+          {
+            method: 'POST',
+            body: formData
+          }
+        );
+    
+    
+        toast(
+          '✓ ¡Emoción guardada en la base de datos!'
+        );
+    
+    
+        /*
+          Limpiar formulario
+        */
+    
+        $('story').value = '';
+    
+    
+        state = {
+          emotion: null,
+          intensity: null,
+          audio: null,
+          blob: null
+        };
+    
+    
+        $('preview').pause();
+    
+        $('preview').removeAttribute('src');
+    
+        $('preview')
+          .classList
+          .add('hidden');
+    
+    
+        $('record').textContent =
+          '🎙️ Grabar';
+    
+    
+        $('recordStatus').textContent =
+          'Hasta 60 segundos.';
+    
+    
+        $('adviceBox')
+          .classList
+          .add('hidden');
+    
+    
+        $('intensityBox')
+          .classList
+          .add('hidden');
+    
+    
+        document
+          .querySelectorAll(
+            '.emotion,.level'
+          )
+          .forEach(
+            item =>
+              item.classList.remove(
+                'selected'
+              )
+          );
+    
+    
+        /*
+          Actualización inmediata.
+          No esperamos los 10 segundos.
+        */
+    
+        if (selectedFamily) {
+    
+          await refreshFamilyData(false);
+    
+        }
+    
+      }
+    
+      catch (error) {
+    
+        console.error(error);
+    
+        toast(
+          'No se pudo guardar: ' +
+          error.message
+        );
+    
+      }
+    
+    };
+    
+    
+    /* =========================================================
+       FAMILIAS / NIÑOS
+    ========================================================= */
+    
+    async function loadFamilies() {
+    
+      try {
+    
+        families =
+          await api('/families');
+    
+    
+        /*
+          Verificar si la familia almacenada
+          todavía existe.
+        */
+    
+        const validFamily =
+          families.some(
+            family =>
+              Number(family.id) ===
+              Number(selectedFamily)
+          );
+    
+    
+        if (!validFamily) {
+    
+          selectedFamily = null;
+    
+          localStorage.removeItem(
+            'emoti_selected_family'
+          );
+    
+        }
+    
+    
+        const options =
+          '<option value="">Selecciona una familia</option>' +
+    
+          families
+            .map(
+              family => `
+                <option value="${family.id}">
+                  ${escapeHtml(family.name)}
+                  ·
+                  ${escapeHtml(family.parent_name)}
+                </option>
+              `
+            )
+            .join('');
+    
+    
+        $('familySelect').innerHTML =
+          options;
+    
+    
+        $('setupFamily').innerHTML =
+          options;
+    
+    
+        if (selectedFamily) {
+    
+          $('familySelect').value =
+            String(selectedFamily);
+    
+          $('setupFamily').value =
+            String(selectedFamily);
+    
+        }
+    
+    
+        /*
+          Lista de familias
+        */
+    
+        $('familiesList').innerHTML =
+    
+          families
+            .map(
+              family => `
+                <div class="listItem">
+    
+                  <b>
+                    ${escapeHtml(family.name)}
+                  </b>
+    
+                  <div class="mut">
+    
+                    Adulto:
+                    ${escapeHtml(
+                      family.parent_name
+                    )}
+    
+                    ${
+                      family.parent_email
+                        ?
+                        ' · ' +
+                        escapeHtml(
+                          family.parent_email
+                        )
+                        :
+                        ''
+                    }
+    
+                  </div>
+    
+                </div>
+              `
+            )
+            .join('')
+    
+          ||
+    
+          '<div class="mut">Aún no hay familias.</div>';
+    
+    
+        /*
+          Cargar todos los niños
+        */
+    
+        let childOptions =
+          '<option value="">Selecciona un niño</option>';
+    
+    
+        for (
+          const family of families
+        ) {
+    
+          const children =
+            await api(
+              '/families/' +
+              family.id +
+              '/children'
+            );
+    
+    
+          childOptions +=
+            children
+              .map(
+                child => `
+                  <option
+                    data-family-id="${family.id}"
+                    value="${child.id}"
+                  >
+                    ${child.avatar || '🧒'}
+                    ${escapeHtml(child.name)}
+                    ·
+                    ${escapeHtml(family.name)}
+                  </option>
+                `
+              )
+              .join('');
+    
+        }
+    
+    
+        $('childSelect').innerHTML =
+          childOptions;
+    
+    
+        /*
+          Restaurar niño seleccionado
+        */
+    
+        const childStillExists =
+          selectedChild &&
+          [
+            ...$('childSelect').options
+          ]
+            .some(
+              option =>
+                Number(option.value) ===
+                Number(selectedChild)
+            );
+    
+    
+        if (childStillExists) {
+    
+          $('childSelect').value =
+            String(selectedChild);
+    
+          localStorage.setItem(
+            'emoti_selected_child',
+            String(selectedChild)
+          );
+    
+        }
+    
+        else {
+    
+          selectedChild = null;
+    
+          localStorage.removeItem(
+            'emoti_selected_child'
+          );
+    
+        }
+    
+    
+        $('childFlow')
+          .classList
+          .toggle(
+            'hidden',
+            !selectedChild
+          );
+    
+    
+        /*
+          Restaurar panel familiar
+        */
+    
+        if (selectedFamily) {
+    
+          await refreshFamilyData(false);
+    
+        }
+    
+        else {
+    
+          $('familySummary')
+            .classList
+            .add('hidden');
+    
+    
+          $('selectedFamilyBadge')
+            .classList
+            .add('hidden');
+    
+        }
+    
+      }
+    
+      catch (error) {
+    
+        console.error(error);
+    
+        toast(
+          'No hay conexión con el servidor o la base de datos.'
+        );
+    
+      }
+    
+    }
+    
+    
+    /* =========================================================
+       DETECTAR SI HAY AUDIO REPRODUCIÉNDOSE
+    ========================================================= */
+    
+    function isAnyAudioPlaying() {
+    
+      const audios =
+        document.querySelectorAll(
+          '#history audio'
+        );
+    
+    
+      return [...audios].some(
+        audio =>
+          !audio.paused &&
+          !audio.ended
+      );
+    
+    }
+    
+    
+    /* =========================================================
+       ACTUALIZAR PANEL FAMILIAR
+    ========================================================= */
+    
+    async function refreshFamilyData(
+      showToast = true
+    ) {
+    
+      if (!selectedFamily) {
+        return;
+      }
+    
+    
+      /*
+        IMPORTANTE:
+        Si un audio está reproduciéndose,
+        NO reconstruimos la bitácora.
+      */
+    
+      if (isAnyAudioPlaying()) {
+    
+        console.log(
+          'EMOTI: actualización pausada porque hay audio reproduciéndose'
+        );
+    
+        return;
+    
+      }
+    
+    
+      try {
+    
+        const [children, records] =
+          await Promise.all([
+    
+            api(
+              '/families/' +
+              selectedFamily +
+              '/children'
+            ),
+    
+            api(
+              '/families/' +
+              selectedFamily +
+              '/emotions'
+            )
+    
+          ]);
+    
+    
+        const family =
+          families.find(
+            item =>
+              Number(item.id) ===
+              Number(selectedFamily)
+          );
+    
+    
+        if (family) {
+    
+          $('selectedFamilyBadge')
+            .textContent =
+            '🏠 Familia: ' +
+            family.name;
+    
+    
+          $('selectedFamilyBadge')
+            .classList
+            .remove('hidden');
+    
+        }
+    
+    
+        $('familySummary')
+          .classList
+          .remove('hidden');
+    
+    
+        /*
+          KPIs
+        */
+    
+        $('fc').textContent =
+          children.length;
+    
+    
+        $('fr').textContent =
+          records.length;
+    
+    
+        $('fa').textContent =
+          records.filter(
+            record =>
+              record.has_audio ||
+              record.audio_path
+          ).length;
+    
+    
+        /*
+          Niños de la familia
+        */
+    
+        $('childrenList').innerHTML =
+    
+          children
+            .map(
+              child => `
+                <span class="chip">
+                  ${child.avatar || '🧒'}
+                  ${escapeHtml(child.name)}
+                </span>
+              `
+            )
+            .join(' ')
+    
+          ||
+    
+          '<span class="mut">Sin niños</span>';
+    
+    
+        /*
+          HISTORIAL
+        */
+    
+        $('history').innerHTML =
+    
+          records
+            .map(record => {
+    
+              const emotion =
+                E.find(
+                  item =>
+                    item[0] ===
+                    record.emotion
+                );
+    
+    
+              const dateObject =
+                new Date(
+                  record.created_at
+                );
+    
+    
+              let date =
+                dateObject.toLocaleDateString(
+                  'es-CL',
+                  {
+                    weekday: 'long',
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric'
+                  }
+                );
+    
+    
+              date =
+                date.charAt(0).toUpperCase() +
+                date.slice(1);
+    
+    
+              const time =
+                dateObject.toLocaleTimeString(
+                  'es-CL',
+                  {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }
+                );
+    
+    
+              /*
+                AUDIO:
+                para registros nuevos usamos
+                /api/emotions/:id/audio
+              */
+    
+              let audioHtml = '';
+    
+    
+              if (
+                record.has_audio
+              ) {
+    
+                audioHtml = `
+                  <audio
+                    class="audio"
+                    controls
+                    preload="metadata"
+                    src="/api/emotions/${record.id}/audio"
+                  ></audio>
+                `;
+    
+              }
+    
+              /*
+                Compatibilidad con registros antiguos.
+              */
+    
+              else if (
+                record.audio_path
+              ) {
+    
+                audioHtml = `
+                  <audio
+                    class="audio"
+                    controls
+                    preload="metadata"
+                    src="${record.audio_path}"
+                  ></audio>
+                `;
+    
+              }
+    
+    
+              return `
+                <div class="listItem">
+    
+                  <div class="listHead">
+    
+                    <div class="big">
+                      ${
+                        emotion
+                          ?
+                          emotion[1]
+                          :
+                          '🙂'
+                      }
+                    </div>
+    
+                    <div class="grow">
+    
+                      <div class="historyDate">
+                        ${date}
+                      </div>
+    
+                      <div class="historyTime">
+                        ${time}
+                      </div>
+    
+                      <div class="historySentence">
+    
+                        ${escapeHtml(
+                          record.child_name
+                        )}
+    
+                        se siente
+    
+                        ${
+                          emotion
+                            ?
+                            escapeHtml(
+                              emotion[2]
+                                .toLowerCase()
+                            )
+                            :
+                            escapeHtml(
+                              record.emotion
+                            )
+                        }
+    
+                      </div>
+    
+                      <div class="historyEmotion">
+    
+                        Intensidad
+                        ${record.intensity}/5
+    
+                      </div>
+    
+                    </div>
+    
+                  </div>
+    
+    
+                  ${
+                    record.story
+                      ?
+                      `
+                        <div class="detail">
+                          ${escapeHtml(
+                            record.story
+                          )}
+                        </div>
+                      `
+                      :
+                      ''
+                  }
+    
+    
+                  ${audioHtml}
+    
+                </div>
+              `;
+    
+            })
+            .join('')
+    
+          ||
+    
+          '<div class="mut">Aún no hay registros para esta familia.</div>';
+    
+    
+        if (showToast) {
+    
+          toast(
+            '✓ Historial actualizado'
+          );
+    
+        }
+    
+      }
+    
+      catch (error) {
+    
+        console.error(
+          'Error actualizando familia:',
+          error
+        );
+    
+      }
+    
+    }
+    
+    
+    /* =========================================================
+       ACTUALIZACIÓN AUTOMÁTICA
+    ========================================================= */
+    
+    function startFamilyRefresh() {
+    
+      stopFamilyRefresh();
+    
+    
+      /*
+        Actualización inmediata al entrar.
+      */
+    
+      if (selectedFamily) {
+    
+        refreshFamilyData(false);
+    
+      }
+    
+    
+      /*
+        Luego cada 10 segundos.
+      */
+    
+      familyRefreshTimer =
+        setInterval(
+          () => {
+    
+            /*
+              Solamente actualizamos si:
+    
+              - Estamos en la pantalla Familia
+              - Existe familia seleccionada
+              - NO hay audio reproduciéndose
+            */
+    
+            if (
+              !$('family')
+                .classList
+                .contains('hidden')
+              &&
+              selectedFamily
+              &&
+              !isAnyAudioPlaying()
+            ) {
+    
+              refreshFamilyData(false);
+    
+            }
+    
+          },
+          10000
+        );
+    
+    }
+    
+    
+    function stopFamilyRefresh() {
+    
+      if (familyRefreshTimer) {
+    
+        clearInterval(
+          familyRefreshTimer
+        );
+    
+        familyRefreshTimer = null;
+    
+      }
+    
+    }
+    
+    
+    /* =========================================================
+       CREAR FAMILIA
+    ========================================================= */
+    
+    $('createFamily').onclick =
+    async () => {
+    
+      try {
+    
+        await api(
+          '/families',
+          {
+            method: 'POST',
+    
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+    
+            body:
+              JSON.stringify({
+    
+                name:
+                  $('fname').value,
+    
+                parentName:
+                  $('pname').value,
+    
+                parentEmail:
+                  $('pemail').value,
+    
+                pin:
+                  $('fpin').value ||
+                  '1234'
+    
+              })
+          }
+        );
+    
+    
+        toast(
+          '✓ Familia creada'
+        );
+    
+    
+        $('fname').value = '';
+    
+        $('pname').value = '';
+    
+        $('pemail').value = '';
+    
+    
+        await loadFamilies();
+    
+      }
+    
+      catch (error) {
+    
+        toast(
+          error.message
+        );
+    
+      }
+    
+    };
+    
+    
+    /* =========================================================
+       CREAR NIÑO
+    ========================================================= */
+    
+    $('createChild').onclick =
+    async () => {
+    
+      try {
+    
+        await api(
+          '/children',
+          {
+            method: 'POST',
+    
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+    
+            body:
+              JSON.stringify({
+    
+                familyId:
+                  Number(
+                    $('setupFamily').value
+                  ),
+    
+                name:
+                  $('cname').value,
+    
+                birthYear:
+                  Number(
+                    $('cyear').value
+                  ) || null,
+    
+                avatar:
+                  $('avatar').value
+    
+              })
+          }
+        );
+    
+    
+        toast(
+          '✓ Niño agregado'
+        );
+    
+    
+        selectedFamily =
+          Number(
+            $('setupFamily').value
+          ) ||
+          selectedFamily;
+    
+    
+        if (selectedFamily) {
+    
+          localStorage.setItem(
+            'emoti_selected_family',
+            String(selectedFamily)
+          );
+    
+        }
+    
+    
+        $('cname').value = '';
+    
+        $('cyear').value = '';
+    
+    
+        await loadFamilies();
+    
+      }
+    
+      catch (error) {
+    
+        toast(
+          error.message
+        );
+    
+      }
+    
+    };
+    
+    
+    /* =========================================================
+       SELECCIONAR FAMILIA
+    ========================================================= */
+    
+    $('familySelect').onchange =
+    async () => {
+    
+      selectedFamily =
+        Number(
+          $('familySelect').value
+        ) ||
+        null;
+    
+    
+      if (selectedFamily) {
+    
+        localStorage.setItem(
+          'emoti_selected_family',
+          String(selectedFamily)
+        );
+    
+    
+        $('setupFamily').value =
+          String(selectedFamily);
+    
+      }
+    
+      else {
+    
+        localStorage.removeItem(
+          'emoti_selected_family'
+        );
+    
+    
+        $('familySummary')
+          .classList
+          .add('hidden');
+    
+    
+        $('selectedFamilyBadge')
+          .classList
+          .add('hidden');
+    
+    
+        stopFamilyRefresh();
+    
+        return;
+    
+      }
+    
+    
+      await refreshFamilyData(true);
+    
+      startFamilyRefresh();
+    
+    };
+    
+    
+    /* =========================================================
+       CARGA INICIAL
+    ========================================================= */
+    
+    loadFamilies();
+    
+    </script>  
+</body></html>
   
