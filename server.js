@@ -74,27 +74,21 @@ app.post('/api/children', async (req,res)=>{
   const {familyId,name,birthYear,avatar='🧒'}=req.body;
   if(!familyId||!name) return res.status(400).json({error:'familyId y name son obligatorios'});
   try {
-    const safeRegisteredBy = registeredBy === 'adult' ? 'adult' : 'child';
-    const safeRegisteredByName = safeRegisteredBy === 'adult'
-      ? (registeredByName || 'Adulto responsable')
-      : null;
+   
 
     const rows=await query(DB_TYPE==='mysql'
-      ? 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path,registered_by,registered_by_name) VALUES(?,?,?,?,?,?,?)'
-      : 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path,audio_data,audio_mime,registered_by,registered_by_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,child_id,emotion,intensity,story,audio_path,audio_mime,registered_by,registered_by_name,created_at',
+      ? 'INSERT INTO children(family_id,name,birth_year,avatar) VALUES(?,?,?,?)'
+      : 'INSERT INTO children(family_id,name,birth_year,avatar) VALUES($1,$2,$3,$4) RETURNING id,family_id,name,birth_year,avatar,created_at',
       DB_TYPE==='mysql'
-        ? [childId,emotion,Number(intensity),story,audioPath,safeRegisteredBy,safeRegisteredByName]
-        : [childId,emotion,Number(intensity),story,audioPath,audioData,audioMime,safeRegisteredBy,safeRegisteredByName]);
+        ? [familyId,name,birthYear,avatar]
+        : [familyId,name,birthYear,avatar]);
 
     if(DB_TYPE==='mysql') return res.json({
       id:rows.insertId,
-      child_id:childId,
-      emotion,
-      intensity:Number(intensity),
-      story,
-      audio_path:audioPath,
-      registered_by:safeRegisteredBy,
-      registered_by_name:safeRegisteredByName
+      family_id:familyId,
+      name,
+      birth_year:birthYear,
+      avatar,
     });
 
     res.json(rows[0]);
