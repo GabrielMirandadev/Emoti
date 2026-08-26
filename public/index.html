@@ -25,6 +25,24 @@
     .chartWrap{height:260px;min-height:260px}
   }
   
+  
+  .adultEntry{margin-top:16px;padding:15px;background:linear-gradient(145deg,#F7F0FF,#FFFFFF);border:1px solid #E3D7F7;border-radius:20px}
+  .adultEntry h3{margin:0 0 4px;color:var(--p);font-size:19px}
+  .adultEntry .adultHelp{font-size:11px;color:var(--mut);line-height:1.4;margin:0 0 12px}
+  .adultEmotionGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:8px 0 12px}
+  .adultEmotionBtn{border:2px solid transparent;border-radius:15px;background:#fff;padding:9px 4px;min-height:70px;font-size:11px;font-weight:900;color:var(--ink)}
+  .adultEmotionBtn .adultFace{display:block;font-size:28px;margin-bottom:3px}
+  .adultEmotionBtn.selected{border-color:var(--p);background:var(--lav);color:var(--p)}
+  .adultLevels{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:8px 0 12px}
+  .adultLevel{border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px 4px;font-weight:900}
+  .adultLevel.selected{background:var(--t);border-color:var(--t);color:#fff}
+  .sourceBadge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:900;margin-top:6px}
+  .sourceAdult{background:#FFF1CC;color:#7A5C00}
+  .sourceChild{background:#E7F9F7;color:#067B76}
+  @media(max-width:440px){
+    .adultEmotionGrid{grid-template-columns:repeat(3,1fr)}
+  }
+  
   </style><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head><body><div class="app">
   <div class="logo"><img src="logo.png" alt="EMOTI" style="width: 30%; height: 30%;"><span>RECONOCE · REGULA · CONECTA</span></div>
@@ -61,7 +79,43 @@
         <div class="sectionTitle">Niños</div>
         <div id="childrenList"></div>
   
-        <div class="analyticsBox">
+        
+        <div class="adultEntry">
+          <h3>👨‍👩‍👧 Registrar en nombre de un niño</h3>
+          <p class="adultHelp">
+            Un adulto puede registrar una emoción observada o comunicada por el niño.
+            El registro quedará identificado como ingresado por un adulto.
+          </p>
+  
+          <div class="field">
+            <label>Niño</label>
+            <select id="adultChildSelect">
+              <option value="">Selecciona un niño</option>
+            </select>
+          </div>
+  
+          <div class="field">
+            <label>Emoción</label>
+            <div id="adultEmotionGrid" class="adultEmotionGrid"></div>
+          </div>
+  
+          <div class="field">
+            <label>Intensidad</label>
+            <div id="adultLevels" class="adultLevels"></div>
+            <div class="mut">1 = poquito · 5 = muchísimo</div>
+          </div>
+  
+          <div class="field">
+            <label>Observación del adulto (opcional)</label>
+            <textarea id="adultStory" placeholder="Ej.: Me contó que estaba nervioso por una prueba..."></textarea>
+          </div>
+  
+          <button class="primary" id="adultSaveEmotion">
+            ✓ Guardar registro del adulto
+          </button>
+        </div>
+  
+  <div class="analyticsBox">
           <div class="analyticsHeader">
             <div>
               <h3>📊 Resumen emocional</h3>
@@ -149,6 +203,7 @@
   let radarChart = null;
   let countChart = null;
   let trendChart = null;
+  let adultEntryState = { emotion:null, intensity:null };
   
   const E = [
     ['feliz','😊','Feliz','alegre, contento'],
@@ -490,6 +545,8 @@
     formData.append('emotion', state.emotion);
     formData.append('intensity', state.intensity);
     formData.append('story', $('story').value.trim());
+    formData.append('registeredBy', 'child');
+    formData.append('registeredByName', '');
   
     if(state.blob){
       let extension = 'webm';
@@ -633,6 +690,124 @@
       .some(audio => !audio.paused && !audio.ended);
   }
   
+  
+  
+  function buildAdultEntryControls(){
+    if(!$('adultEmotionGrid') || $('adultEmotionGrid').children.length) return;
+  
+    E.forEach(emotion => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'adultEmotionBtn';
+      button.dataset.emotion = emotion[0];
+      button.innerHTML = `<span class="adultFace">${emotion[1]}</span>${emotion[2]}`;
+  
+      button.addEventListener('click', () => {
+        adultEntryState.emotion = emotion[0];
+        document.querySelectorAll('.adultEmotionBtn')
+          .forEach(x => x.classList.remove('selected'));
+        button.classList.add('selected');
+      });
+  
+      $('adultEmotionGrid').appendChild(button);
+    });
+  
+    for(let i=1; i<=5; i++){
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'adultLevel';
+      button.textContent = i;
+  
+      button.addEventListener('click', () => {
+        adultEntryState.intensity = i;
+        document.querySelectorAll('.adultLevel')
+          .forEach(x => x.classList.remove('selected'));
+        button.classList.add('selected');
+      });
+  
+      $('adultLevels').appendChild(button);
+    }
+  }
+  
+  function syncAdultChildSelect(children){
+    if(!$('adultChildSelect')) return;
+  
+    const previous = $('adultChildSelect').value;
+    $('adultChildSelect').innerHTML =
+      '<option value="">Selecciona un niño</option>' +
+      children.map(child => `
+        <option value="${child.id}">
+          ${child.avatar || '🧒'} ${escapeHtml(child.name)}
+        </option>
+      `).join('');
+  
+    if(previous && [...$('adultChildSelect').options].some(o => o.value === previous)){
+      $('adultChildSelect').value = previous;
+    }
+  }
+  
+  function resetAdultEntryForm(){
+    adultEntryState = { emotion:null, intensity:null };
+    document.querySelectorAll('.adultEmotionBtn,.adultLevel')
+      .forEach(x => x.classList.remove('selected'));
+    if($('adultStory')) $('adultStory').value = '';
+  }
+  
+  async function saveAdultEmotion(){
+    const childId = Number($('adultChildSelect').value) || null;
+  
+    if(!selectedFamily){
+      return toast('Selecciona una familia primero.');
+    }
+  
+    if(!childId){
+      return toast('Selecciona un niño.');
+    }
+  
+    if(!adultEntryState.emotion){
+      return toast('Selecciona una emoción.');
+    }
+  
+    if(!adultEntryState.intensity){
+      return toast('Selecciona la intensidad.');
+    }
+  
+    const family = families.find(
+      f => Number(f.id) === Number(selectedFamily)
+    );
+  
+    const formData = new FormData();
+    formData.append('childId', childId);
+    formData.append('emotion', adultEntryState.emotion);
+    formData.append('intensity', adultEntryState.intensity);
+    formData.append('story', $('adultStory').value.trim());
+    formData.append('registeredBy', 'adult');
+    formData.append('registeredByName', family?.parent_name || 'Adulto responsable');
+  
+    try{
+      $('adultSaveEmotion').disabled = true;
+      $('adultSaveEmotion').textContent = 'Guardando…';
+  
+      await api('/emotions', {
+        method:'POST',
+        body:formData
+      });
+  
+      toast('✓ Registro del adulto guardado');
+      resetAdultEntryForm();
+  
+      await refreshFamilyData(false);
+  
+    }catch(error){
+      console.error(error);
+      toast('No se pudo guardar: ' + error.message);
+    }finally{
+      $('adultSaveEmotion').disabled = false;
+      $('adultSaveEmotion').textContent = '✓ Guardar registro del adulto';
+    }
+  }
+  
+  buildAdultEntryControls();
   
   function getChartFilterState(){
     const childId = $('chartChildFilter') ? Number($('chartChildFilter').value) || null : null;
@@ -913,6 +1088,11 @@
                   ${emotion ? escapeHtml(emotion[2].toLowerCase()) : escapeHtml(record.emotion)}
                 </div>
                 <div class="historyEmotion">Intensidad ${record.intensity}/5</div>
+                ${
+                  record.registered_by === 'adult'
+                    ? `<div class="sourceBadge sourceAdult">👨‍👩‍👧 Registrado por ${escapeHtml(record.registered_by_name || 'adulto')}</div>`
+                    : `<div class="sourceBadge sourceChild">🌈 Registrado por el niño</div>`
+                }
               </div>
             </div>
             ${record.story ? `<div class="detail">${escapeHtml(record.story)}</div>` : ''}
@@ -965,6 +1145,7 @@
         || '<span class="mut">Sin niños</span>';
   
       syncChartChildFilter(children);
+      syncAdultChildSelect(children);
       renderAnalyticsAndHistory();
   
       if(showToast){
@@ -1088,6 +1269,11 @@
     startFamilyRefresh();
   };
   
+  
+  
+  if($('adultSaveEmotion')){
+    $('adultSaveEmotion').addEventListener('click', saveAdultEmotion);
+  }
   
   if($('chartChildFilter')){
     $('chartChildFilter').addEventListener('change', () => {

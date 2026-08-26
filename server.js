@@ -74,17 +74,35 @@ app.post('/api/children', async (req,res)=>{
   const {familyId,name,birthYear,avatar='🧒'}=req.body;
   if(!familyId||!name) return res.status(400).json({error:'familyId y name son obligatorios'});
   try {
+    const safeRegisteredBy = registeredBy === 'adult' ? 'adult' : 'child';
+    const safeRegisteredByName = safeRegisteredBy === 'adult'
+      ? (registeredByName || 'Adulto responsable')
+      : null;
+
     const rows=await query(DB_TYPE==='mysql'
-      ? 'INSERT INTO children(family_id,name,birth_year,avatar) VALUES(?,?,?,?)'
-      : 'INSERT INTO children(family_id,name,birth_year,avatar) VALUES($1,$2,$3,$4) RETURNING *',
-      [familyId,name,birthYear||null,avatar]);
-    if(DB_TYPE==='mysql') return res.json({id:rows.insertId,family_id:familyId,name,birth_year:birthYear||null,avatar});
+      ? 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path,registered_by,registered_by_name) VALUES(?,?,?,?,?,?,?)'
+      : 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path,audio_data,audio_mime,registered_by,registered_by_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,child_id,emotion,intensity,story,audio_path,audio_mime,registered_by,registered_by_name,created_at',
+      DB_TYPE==='mysql'
+        ? [childId,emotion,Number(intensity),story,audioPath,safeRegisteredBy,safeRegisteredByName]
+        : [childId,emotion,Number(intensity),story,audioPath,audioData,audioMime,safeRegisteredBy,safeRegisteredByName]);
+
+    if(DB_TYPE==='mysql') return res.json({
+      id:rows.insertId,
+      child_id:childId,
+      emotion,
+      intensity:Number(intensity),
+      story,
+      audio_path:audioPath,
+      registered_by:safeRegisteredBy,
+      registered_by_name:safeRegisteredByName
+    });
+
     res.json(rows[0]);
   } catch(e){res.status(500).json({error:e.message});}
 });
 
 app.post('/api/emotions', upload.single('audio'), async (req,res)=>{
-  const {childId,emotion,intensity,story=''}=req.body;
+  const {childId,emotion,intensity,story='',registeredBy='child',registeredByName=''}=req.body;
   if(!childId||!emotion||!intensity) return res.status(400).json({error:'childId, emotion e intensity son obligatorios'});
   const audioPath=null; // los audios nuevos se guardan en PostgreSQL
   const audioData=req.file ? req.file.buffer : null;
@@ -102,11 +120,11 @@ app.post('/api/emotions', upload.single('audio'), async (req,res)=>{
 });
 
 app.get('/api/children/:childId/emotions', async (req,res)=>{
-  try { res.json(await query('SELECT r.id,r.child_id,r.emotion,r.intensity,r.story,r.audio_path,r.created_at,c.name AS child_name, CASE WHEN r.audio_data IS NOT NULL THEN TRUE ELSE FALSE END AS has_audio FROM emotion_records r JOIN children c ON c.id=r.child_id WHERE r.child_id=$1 ORDER BY r.created_at DESC',[req.params.childId])); }
+  try { res.json(await query('SELECT r.id,r.child_id,r.emotion,r.intensity,r.story,r.audio_path,r.registered_by,r.registered_by_name,r.created_at,c.name AS child_name, CASE WHEN r.audio_data IS NOT NULL THEN TRUE ELSE FALSE END AS has_audio FROM emotion_records r JOIN children c ON c.id=r.child_id WHERE r.child_id=$1 ORDER BY r.created_at DESC',[req.params.childId])); }
   catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/families/:familyId/emotions', async (req,res)=>{
-  try { res.json(await query('SELECT r.id,r.child_id,r.emotion,r.intensity,r.story,r.audio_path,r.created_at,c.name AS child_name, CASE WHEN r.audio_data IS NOT NULL THEN TRUE ELSE FALSE END AS has_audio FROM emotion_records r JOIN children c ON c.id=r.child_id WHERE c.family_id=$1 ORDER BY r.created_at DESC',[req.params.familyId])); }
+  try { res.json(await query('SELECT r.id,r.child_id,r.emotion,r.intensity,r.story,r.audio_path,r.registered_by,r.registered_by_name,r.created_at,c.name AS child_name, CASE WHEN r.audio_data IS NOT NULL THEN TRUE ELSE FALSE END AS has_audio FROM emotion_records r JOIN children c ON c.id=r.child_id WHERE c.family_id=$1 ORDER BY r.created_at DESC',[req.params.familyId])); }
   catch(e){res.status(500).json({error:e.message});}
 });
 
