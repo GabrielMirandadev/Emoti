@@ -110,10 +110,10 @@ app.post('/api/emotions', upload.single('audio'), async (req,res)=>{
   try {
     const rows=await query(DB_TYPE==='mysql'
       ? 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path) VALUES(?,?,?,?,?)'
-      : 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path,audio_data,audio_mime) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,child_id,emotion,intensity,story,audio_path,audio_mime,created_at',
+      : 'INSERT INTO emotion_records(child_id,emotion,intensity,registered_by,registered_by_name,story,audio_path,audio_data,audio_mime) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,child_id,emotion,intensity,story,audio_path,audio_mime,created_at',
       DB_TYPE==='mysql'
         ? [childId,emotion,Number(intensity),story,audioPath]
-        : [childId,emotion,Number(intensity),story,audioPath,audioData,audioMime]);
+        : [childId,emotion,Number(intensity),registeredBy,registeredByName,story,audioPath,audioData,audioMime]);
     if(DB_TYPE==='mysql') return res.json({id:rows.insertId,child_id:childId,emotion,intensity:Number(intensity),story,audio_path:audioPath});
     res.json(rows[0]);
   } catch(e){ res.status(500).json({error:e.message}); }
