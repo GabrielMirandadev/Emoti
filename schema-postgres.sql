@@ -21,7 +21,13 @@ CREATE TABLE IF NOT EXISTS emotion_records (
   intensity INTEGER NOT NULL CHECK (intensity BETWEEN 1 AND 5),
   story TEXT,
   audio_path VARCHAR(255),
+  audio_data BYTEA,
+  audio_mime VARCHAR(100),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_children_family ON children(family_id);
 CREATE INDEX IF NOT EXISTS idx_records_child_date ON emotion_records(child_id, created_at DESC);
+
+-- Migración compatible con bases ya creadas
+ALTER TABLE emotion_records ADD COLUMN IF NOT EXISTS audio_data BYTEA;
+ALTER TABLE emotion_records ADD COLUMN IF NOT EXISTS audio_mime VARCHAR(100);

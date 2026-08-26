@@ -8,9 +8,9 @@ const mysql = require('mysql2/promise');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_TYPE = (process.env.DB_TYPE || 'postgres').toLowerCase();
-const uploadDir = path.join(__dirname, 'uploads');
+const uploadDir = path.join(__dirname, 'uploads'); // solo compatibilidad con audios antiguos
 fs.mkdirSync(uploadDir, { recursive: true });
-const upload = multer({ dest: uploadDir, limits: { fileSize: 8 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 
 let db;
 if (DB_TYPE === 'mysql') {
@@ -86,25 +86,39 @@ app.post('/api/children', async (req,res)=>{
 app.post('/api/emotions', upload.single('audio'), async (req,res)=>{
   const {childId,emotion,intensity,story=''}=req.body;
   if(!childId||!emotion||!intensity) return res.status(400).json({error:'childId, emotion e intensity son obligatorios'});
-  let audioPath=null;
-  if(req.file) audioPath='/uploads/'+req.file.filename;
+  const audioPath=null; // los audios nuevos se guardan en PostgreSQL
+  const audioData=req.file ? req.file.buffer : null;
+  const audioMime=req.file ? (req.file.mimetype || 'application/octet-stream') : null;
   try {
     const rows=await query(DB_TYPE==='mysql'
       ? 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path) VALUES(?,?,?,?,?)'
-      : 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path) VALUES($1,$2,$3,$4,$5) RETURNING *',
-      [childId,emotion,Number(intensity),story,audioPath]);
+      : 'INSERT INTO emotion_records(child_id,emotion,intensity,story,audio_path,audio_data,audio_mime) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,child_id,emotion,intensity,story,audio_path,audio_mime,created_at',
+      DB_TYPE==='mysql'
+        ? [childId,emotion,Number(intensity),story,audioPath]
+        : [childId,emotion,Number(intensity),story,audioPath,audioData,audioMime]);
     if(DB_TYPE==='mysql') return res.json({id:rows.insertId,child_id:childId,emotion,intensity:Number(intensity),story,audio_path:audioPath});
     res.json(rows[0]);
-  } catch(e){ if(req.file) fs.unlink(req.file.path,()=>{}); res.status(500).json({error:e.message}); }
+  } catch(e){ res.status(500).json({error:e.message}); }
 });
 
 app.get('/api/children/:childId/emotions', async (req,res)=>{
-  try { res.json(await query('SELECT r.id,r.child_id,r.emotion,r.intensity,r.story,r.audio_path,r.created_at,c.name AS child_name FROM emotion_records r JOIN children c ON c.id=r.child_id WHERE r.child_id=$1 ORDER BY r.created_at DESC',[req.params.childId])); }
+  try { res.json(await query('SELECT r.id,r.child_id,r.emotion,r.intensity,r.story,r.audio_path,r.created_at,c.name AS child_name, CASE WHEN r.audio_data IS NOT NULL THEN TRUE ELSE FALSE END AS has_audio FROM emotion_records r JOIN children c ON c.id=r.child_id WHERE r.child_id=$1 ORDER BY r.created_at DESC',[req.params.childId])); }
   catch(e){res.status(500).json({error:e.message});}
 });
 app.get('/api/families/:familyId/emotions', async (req,res)=>{
-  try { res.json(await query('SELECT r.id,r.child_id,r.emotion,r.intensity,r.story,r.audio_path,r.created_at,c.name AS child_name FROM emotion_records r JOIN children c ON c.id=r.child_id WHERE c.family_id=$1 ORDER BY r.created_at DESC',[req.params.familyId])); }
+  try { res.json(await query('SELECT r.id,r.child_id,r.emotion,r.intensity,r.story,r.audio_path,r.created_at,c.name AS child_name, CASE WHEN r.audio_data IS NOT NULL THEN TRUE ELSE FALSE END AS has_audio FROM emotion_records r JOIN children c ON c.id=r.child_id WHERE c.family_id=$1 ORDER BY r.created_at DESC',[req.params.familyId])); }
   catch(e){res.status(500).json({error:e.message});}
+});
+
+app.get('/api/emotions/:id/audio', async (req,res)=>{
+  if(DB_TYPE !== 'postgres') return res.status(404).send('Audio no disponible');
+  try {
+    const rows=await query('SELECT audio_data,audio_mime FROM emotion_records WHERE id=$1',[req.params.id]);
+    if(!rows.length || !rows[0].audio_data) return res.status(404).send('Audio no encontrado');
+    res.setHeader('Content-Type', rows[0].audio_mime || 'application/octet-stream');
+    res.setHeader('Cache-Control','private, max-age=3600');
+    res.send(rows[0].audio_data);
+  } catch(e){ res.status(500).json({error:e.message}); }
 });
 
 app.get('/api/demo/status', async (req,res)=>{
