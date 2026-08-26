@@ -110,15 +110,64 @@ app.get('/api/families/:familyId/emotions', async (req,res)=>{
   catch(e){res.status(500).json({error:e.message});}
 });
 
-app.get('/api/emotions/:id/audio', async (req,res)=>{
-  if(DB_TYPE !== 'postgres') return res.status(404).send('Audio no disponible');
+app.get('/api/emotions/:id/audio', async (req, res) => {
+  if (DB_TYPE !== 'postgres') {
+    return res.status(404).send('Audio no disponible');
+  }
+
   try {
-    const rows=await query('SELECT audio_data,audio_mime FROM emotion_records WHERE id=$1',[req.params.id]);
-    if(!rows.length || !rows[0].audio_data) return res.status(404).send('Audio no encontrado');
-    res.setHeader('Content-Type', rows[0].audio_mime || 'application/octet-stream');
-    res.setHeader('Cache-Control','private, max-age=3600');
-    res.send(rows[0].audio_data);
-  } catch(e){ res.status(500).json({error:e.message}); }
+    const rows = await query(
+      'SELECT audio_data, audio_mime FROM emotion_records WHERE id=$1',
+      [req.params.id]
+    );
+
+    if (!rows.length || !rows[0].audio_data) {
+      return res.status(404).send('Audio no encontrado');
+    }
+
+    const audioBuffer = rows[0].audio_data;
+    const mimeType = rows[0].audio_mime || 'audio/mp4';
+    const fileSize = audioBuffer.length;
+    const range = req.headers.range;
+
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const requestedEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const end = Math.min(requestedEnd, fileSize - 1);
+
+      if (
+        Number.isNaN(start) ||
+        Number.isNaN(end) ||
+        start >= fileSize ||
+        start > end
+      ) {
+        res.status(416);
+        res.setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      const chunkSize = end - start + 1;
+
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+      res.setHeader('Content-Length', chunkSize);
+
+      return res.end(audioBuffer.subarray(start, end + 1));
+    }
+
+    res.status(200);
+    res.setHeader('Content-Length', fileSize);
+    return res.end(audioBuffer);
+
+  } catch (error) {
+    console.error('Error reproduciendo audio:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/api/demo/status', async (req,res)=>{

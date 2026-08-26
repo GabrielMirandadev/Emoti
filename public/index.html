@@ -17,1626 +17,749 @@
   <section id="setup" class="hidden"><div class="card"><h2>Configurar demo</h2><p class="sub">Primero crea una familia y después agrega uno o más niños. Esta pantalla reemplaza los datos de prueba fijos.</p><div class="sectionTitle">Nueva familia</div><div class="row"><div class="field"><label>Nombre de familia</label><input id="fname" placeholder="Familia Pérez"></div><div class="field"><label>Adulto responsable</label><input id="pname" placeholder="María Pérez"></div></div><div class="field"><label>Email (demo)</label><input id="pemail" type="email" placeholder="familia@email.com"></div><div class="field"><label>PIN del panel</label><input id="fpin" value="1234" maxlength="20"></div><button class="primary" id="createFamily">Crear familia</button><div class="sectionTitle">Agregar niño</div><div class="field"><label>Familia</label><select id="setupFamily"></select></div><div class="row"><div class="field"><label>Nombre del niño</label><input id="cname" placeholder="Sofía"></div><div class="field"><label>Año de nacimiento</label><input id="cyear" type="number" min="2010" max="2026" placeholder="2018"></div></div><div class="field"><label>Avatar</label><select id="avatar"><option>🧒</option><option>👧</option><option>👦</option><option>🦄</option><option>🐼</option></select></div><button class="primary" id="createChild">Agregar niño</button><div class="sectionTitle">Familias existentes</div><div id="familiesList"></div></div></section>
   </div><div id="toast" class="toast hidden"></div>
   <script>
-    const API = '/api';
-    
-    let families = [];
-    
-    let selectedFamily =
-      Number(localStorage.getItem('emoti_selected_family')) || null;
-    
-    let selectedChild =
-      Number(localStorage.getItem('emoti_selected_child')) || null;
-    
-    let state = {
-      emotion: null,
-      intensity: null,
-      audio: null,
-      blob: null
-    };
-    
-    let recorder = null;
-    let chunks = [];
-    let familyRefreshTimer = null;
-    
-    
-    /* =========================================================
-       EMOCIONES
-    ========================================================= */
-    
-    const E = [
-      ['feliz', '😊', 'Feliz', 'alegre, contento'],
-      ['triste', '😢', 'Triste', 'con pena'],
-      ['enojo', '😠', 'Enojado', 'con rabia, molesto'],
-      ['miedo', '😨', 'Miedo', 'asustado'],
-      ['nervioso', '😟', 'Nervioso', 'preocupado, ansioso']
-    ];
-    
-    
-    const A = {
-    
-      feliz: [
-        '¡Qué alegría!',
-        'Tu alegría también merece ser escuchada.',
-        'Piensa en qué hizo especial este momento y compártelo con alguien.'
-      ],
-    
-      triste: [
-        'Puedes estar triste',
-        'No tienes que esconder una pena.',
-        'Busca un abrazo y cuéntale a alguien qué pasó.'
-      ],
-    
-      enojo: [
-        'Tu enojo tiene algo que decir',
-        'Puede aparecer cuando algo nos molesta o parece injusto.',
-        'Respira, aléjate si es seguro y después explica qué necesitas.'
-      ],
-    
-      miedo: [
-        'El miedo intenta cuidarte',
-        'Primero revisa si estás seguro ahora.',
-        'Busca a un adulto de confianza y cuéntale qué te asusta.'
-      ],
-    
-      nervioso: [
-        'Vamos más despacio',
-        'Tu mente puede ir muy rápido cuando estás ansioso.',
-        'Pon los pies en el suelo y respira entrando en 4 y soltando en 6.'
-      ]
-    
-    };
-    
-    
-    /* =========================================================
-       UTILIDADES
-    ========================================================= */
-    
-    const $ = id => document.getElementById(id);
-    
-    
-    function toast(text) {
-    
-      $('toast').textContent = text;
-    
-      $('toast').classList.remove('hidden');
-    
-      setTimeout(() => {
-        $('toast').classList.add('hidden');
-      }, 2200);
-    
+  const API = '/api';
+  
+  let families = [];
+  let selectedFamily = Number(localStorage.getItem('emoti_selected_family')) || null;
+  let selectedChild = Number(localStorage.getItem('emoti_selected_child')) || null;
+  
+  let state = {
+    emotion: null,
+    intensity: null,
+    audio: null,
+    blob: null
+  };
+  
+  let recorder = null;
+  let chunks = [];
+  let familyRefreshTimer = null;
+  
+  const E = [
+    ['feliz','😊','Feliz','alegre, contento'],
+    ['triste','😢','Triste','con pena'],
+    ['enojo','😠','Enojado','con rabia, molesto'],
+    ['miedo','😨','Miedo','asustado'],
+    ['nervioso','😟','Nervioso','preocupado, ansioso']
+  ];
+  
+  const A = {
+    feliz:[
+      '¡Qué alegría!',
+      'Tu alegría también merece ser escuchada.',
+      'Piensa en qué hizo especial este momento y compártelo con alguien.'
+    ],
+    triste:[
+      'Puedes estar triste',
+      'No tienes que esconder una pena.',
+      'Busca un abrazo y cuéntale a alguien qué pasó.'
+    ],
+    enojo:[
+      'Tu enojo tiene algo que decir',
+      'Puede aparecer cuando algo nos molesta o parece injusto.',
+      'Respira, aléjate si es seguro y después explica qué necesitas.'
+    ],
+    miedo:[
+      'El miedo intenta cuidarte',
+      'Primero revisa si estás seguro ahora.',
+      'Busca a un adulto de confianza y cuéntale qué te asusta.'
+    ],
+    nervioso:[
+      'Vamos más despacio',
+      'Tu mente puede ir muy rápido cuando estás ansioso.',
+      'Pon los pies en el suelo y respira entrando en 4 y soltando en 6.'
+    ]
+  };
+  
+  const $ = id => document.getElementById(id);
+  
+  function toast(text){
+    $('toast').textContent = text;
+    $('toast').classList.remove('hidden');
+    setTimeout(() => $('toast').classList.add('hidden'), 2200);
+  }
+  
+  async function api(url, options = {}){
+    const response = await fetch(API + url, options);
+    const contentType = response.headers.get('content-type') || '';
+    let data = {};
+    if(contentType.includes('application/json')){
+      data = await response.json();
+    } else {
+      data = { error: await response.text() };
     }
-    
-    
-    async function api(url, options = {}) {
-    
-      const response = await fetch(API + url, options);
-    
-      const data = await response.json();
-    
-      if (!response.ok) {
-        throw new Error(data.error || 'Error');
-      }
-    
-      return data;
-    
+    if(!response.ok){
+      throw new Error(data.error || 'Error');
     }
-    
-    
-    function escapeHtml(value) {
-    
-      if (value === null || value === undefined) {
-        return '';
-      }
-    
-      return String(value).replace(
-        /[&<>"']/g,
-        char => ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#039;'
-        }[char])
-      );
-    
-    }
-    
-    
-    /* =========================================================
-       NAVEGACIÓN
-    ========================================================= */
-    
-    function show(section) {
-    
-      ['child', 'family', 'setup'].forEach(id => {
-        $(id).classList.add('hidden');
-      });
-    
-      $(section).classList.remove('hidden');
-    
-      document
-        .querySelectorAll('.nav button')
-        .forEach(button => button.classList.remove('active'));
-    
-    
-      const navMap = {
-        child: 'nChild',
-        family: 'nFamily',
-        setup: 'nSetup'
+    return data;
+  }
+  
+  function escapeHtml(value){
+    if(value === null || value === undefined) return '';
+    return String(value).replace(/[&<>"']/g, char => ({
+      '&':'&amp;',
+      '<':'&lt;',
+      '>':'&gt;',
+      '"':'&quot;',
+      "'":'&#039;'
+    }[char]));
+  }
+  
+  function show(section){
+    ['child','family','setup'].forEach(id => $(id).classList.add('hidden'));
+    $(section).classList.remove('hidden');
+  
+    document.querySelectorAll('.nav button')
+      .forEach(btn => btn.classList.remove('active'));
+  
+    const map = { child:'nChild', family:'nFamily', setup:'nSetup' };
+    if(map[section]) $(map[section]).classList.add('active');
+  }
+  
+  $('nChild').onclick = async () => {
+    stopFamilyRefresh();
+    show('child');
+    await loadFamilies();
+  };
+  
+  $('nFamily').onclick = async () => {
+    show('family');
+    await loadFamilies();
+    startFamilyRefresh();
+  };
+  
+  $('nSetup').onclick = async () => {
+    stopFamilyRefresh();
+    show('setup');
+    await loadFamilies();
+  };
+  
+  function buildEmotions(){
+    E.forEach(emotion => {
+      const button = document.createElement('button');
+      button.className = 'emotion';
+      button.innerHTML = `
+        <div class="face">${emotion[1]}</div>
+        ${emotion[2]}
+        <div class="mut">${emotion[3]}</div>
+      `;
+  
+      button.onclick = () => {
+        state.emotion = emotion[0];
+  
+        document.querySelectorAll('.emotion')
+          .forEach(item => item.classList.remove('selected'));
+  
+        button.classList.add('selected');
+        $('intensityBox').classList.remove('hidden');
+        $('adviceBox').classList.add('hidden');
       };
-    
-      if (navMap[section]) {
-        $(navMap[section]).classList.add('active');
-      }
-    
+  
+      $('emotions').appendChild(button);
+    });
+  
+    for(let i = 1; i <= 5; i++){
+      const button = document.createElement('button');
+      button.className = 'level';
+      button.textContent = i;
+  
+      button.onclick = () => {
+        state.intensity = i;
+  
+        document.querySelectorAll('.level')
+          .forEach(item => item.classList.remove('selected'));
+  
+        button.classList.add('selected');
+      };
+  
+      $('levels').appendChild(button);
     }
-    
-    
-    $('nChild').onclick = async () => {
-    
-      stopFamilyRefresh();
-    
-      show('child');
-    
-      await loadFamilies();
-    
-    };
-    
-    
-    $('nFamily').onclick = async () => {
-    
-      show('family');
-    
-      await loadFamilies();
-    
-      startFamilyRefresh();
-    
-    };
-    
-    
-    $('nSetup').onclick = async () => {
-    
-      stopFamilyRefresh();
-    
-      show('setup');
-    
-      await loadFamilies();
-    
-    };
-    
-    
-    /* =========================================================
-       CREAR BOTONES DE EMOCIONES
-    ========================================================= */
-    
-    function buildEmotions() {
-    
-      E.forEach(emotion => {
-    
-        const button = document.createElement('button');
-    
-        button.className = 'emotion';
-    
-        button.innerHTML = `
-          <div class="face">${emotion[1]}</div>
-          ${emotion[2]}
-          <div class="mut">${emotion[3]}</div>
-        `;
-    
-        button.onclick = () => {
-    
-          state.emotion = emotion[0];
-    
-          document
-            .querySelectorAll('.emotion')
-            .forEach(item => item.classList.remove('selected'));
-    
-          button.classList.add('selected');
-    
-          $('intensityBox').classList.remove('hidden');
-    
-          $('adviceBox').classList.add('hidden');
-    
-        };
-    
-        $('emotions').appendChild(button);
-    
+  }
+  
+  buildEmotions();
+  
+  $('childSelect').onchange = () => {
+    selectedChild = Number($('childSelect').value) || null;
+  
+    if(selectedChild){
+      localStorage.setItem('emoti_selected_child', String(selectedChild));
+    } else {
+      localStorage.removeItem('emoti_selected_child');
+    }
+  
+    const option = $('childSelect').selectedOptions[0];
+    const familyId = Number(option?.dataset.familyId) || null;
+  
+    if(familyId){
+      selectedFamily = familyId;
+      localStorage.setItem('emoti_selected_family', String(familyId));
+    }
+  
+    $('childFlow').classList.toggle('hidden', !selectedChild);
+  };
+  
+  /* =========================================================
+     AUDIO - compatible con iOS / Safari
+  ========================================================= */
+  
+  function isIOSDevice(){
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+  
+  function pickRecorderMimeType(){
+    const isIOS = isIOSDevice();
+  
+    const iosCandidates = [
+      'audio/mp4',
+      'audio/mp4;codecs=mp4a.40.2'
+    ];
+  
+    const otherCandidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/mp4'
+    ];
+  
+    const candidates = isIOS ? iosCandidates : otherCandidates;
+  
+    for(const type of candidates){
+      if(window.MediaRecorder &&
+         typeof MediaRecorder.isTypeSupported === 'function' &&
+         MediaRecorder.isTypeSupported(type)){
+        return type;
+      }
+    }
+  
+    return '';
+  }
+  
+  function resetPreviewAudio(){
+    try{
+      $('preview').pause();
+    }catch(e){}
+  
+    if(state.audio && state.audio.startsWith('blob:')){
+      URL.revokeObjectURL(state.audio);
+    }
+  
+    state.audio = null;
+    $('preview').removeAttribute('src');
+    $('preview').load();
+    $('preview').classList.add('hidden');
+  }
+  
+  $('record').onclick = async () => {
+    if(recorder && recorder.state === 'recording'){
+      recorder.stop();
+      return;
+    }
+  
+    try{
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        throw new Error('Este navegador no permite grabar audio.');
+      }
+  
+      resetPreviewAudio();
+  
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
-    
-    
-      for (let i = 1; i <= 5; i++) {
-    
-        const button = document.createElement('button');
-    
-        button.className = 'level';
-    
-        button.textContent = i;
-    
-        button.onclick = () => {
-    
-          state.intensity = i;
-    
-          document
-            .querySelectorAll('.level')
-            .forEach(item => item.classList.remove('selected'));
-    
-          button.classList.add('selected');
-    
-        };
-    
-        $('levels').appendChild(button);
-    
-      }
-    
-    }
-    
-    
-    buildEmotions();
-    
-    
-    /* =========================================================
-       SELECCIÓN DEL NIÑO
-    ========================================================= */
-    
-    $('childSelect').onchange = () => {
-    
-      selectedChild =
-        Number($('childSelect').value) || null;
-    
-      if (selectedChild) {
-    
-        localStorage.setItem(
-          'emoti_selected_child',
-          String(selectedChild)
-        );
-    
-      } else {
-    
-        localStorage.removeItem(
-          'emoti_selected_child'
-        );
-    
-      }
-    
-    
-      const option =
-        $('childSelect').selectedOptions[0];
-    
-      const familyId =
-        Number(option?.dataset.familyId) || null;
-    
-    
-      if (familyId) {
-    
-        selectedFamily = familyId;
-    
-        localStorage.setItem(
-          'emoti_selected_family',
-          String(familyId)
-        );
-    
-      }
-    
-    
-      $('childFlow')
-        .classList
-        .toggle(
-          'hidden',
-          !selectedChild
-        );
-    
-    };
-    
-    
-    /* =========================================================
-       GRABACIÓN DE AUDIO
-    ========================================================= */
-    
-    $('record').onclick = async () => {
-    
-      /*
-        Si ya estamos grabando,
-        el mismo botón detiene la grabación.
-      */
-    
-      if (
-        recorder &&
-        recorder.state === 'recording'
-      ) {
-    
-        recorder.stop();
-    
-        return;
-    
-      }
-    
-    
-      try {
-    
-        const stream =
-          await navigator.mediaDevices.getUserMedia({
-            audio: true
-          });
-    
-    
-        chunks = [];
-    
-    
-        /*
-          Elegimos el mejor formato compatible
-          con el navegador.
-        */
-    
-        let options = {};
-    
-    
-        if (
-          MediaRecorder.isTypeSupported(
-            'audio/webm;codecs=opus'
-          )
-        ) {
-    
-          options.mimeType =
-            'audio/webm;codecs=opus';
-    
+  
+      chunks = [];
+  
+      const mimeType = pickRecorderMimeType();
+  
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+  
+      recorder.ondataavailable = event => {
+        if(event.data && event.data.size > 0){
+          chunks.push(event.data);
         }
-    
-        else if (
-          MediaRecorder.isTypeSupported(
-            'audio/mp4'
-          )
-        ) {
-    
-          options.mimeType =
-            'audio/mp4';
-    
+      };
+  
+      recorder.onerror = event => {
+        console.error('MediaRecorder error:', event);
+        $('recordStatus').textContent = 'Ocurrió un problema durante la grabación.';
+      };
+  
+      recorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+  
+        const finalMime =
+          recorder.mimeType ||
+          mimeType ||
+          chunks[0]?.type ||
+          (isIOSDevice() ? 'audio/mp4' : 'audio/webm');
+  
+        state.blob = new Blob(chunks, { type: finalMime });
+  
+        console.log('EMOTI audio final', {
+          mime: state.blob.type,
+          size: state.blob.size,
+          chunks: chunks.length,
+          ios: isIOSDevice()
+        });
+  
+        if(state.blob.size < 1000){
+          $('recordStatus').textContent = 'La grabación quedó demasiado corta. Intenta nuevamente.';
+          state.blob = null;
+          return;
         }
-    
-        else if (
-          MediaRecorder.isTypeSupported(
-            'audio/webm'
-          )
-        ) {
-    
-          options.mimeType =
-            'audio/webm';
-    
-        }
-    
-    
-        recorder =
-          new MediaRecorder(
-            stream,
-            options
-          );
-    
-    
-        recorder.ondataavailable = event => {
-    
-          if (
-            event.data &&
-            event.data.size > 0
-          ) {
-    
-            chunks.push(event.data);
-    
-          }
-    
-        };
-    
-    
-        recorder.onstop = () => {
-    
-          stream
-            .getTracks()
-            .forEach(track => track.stop());
-    
-    
-          const mimeType =
-            recorder.mimeType ||
-            chunks[0]?.type ||
-            'audio/webm';
-    
-    
-          state.blob =
-            new Blob(
-              chunks,
-              {
-                type: mimeType
-              }
-            );
-    
-    
-          const previewUrl =
-            URL.createObjectURL(
-              state.blob
-            );
-    
-    
-          $('preview').src =
-            previewUrl;
-    
-    
-          $('preview')
-            .classList
-            .remove('hidden');
-    
-    
-          $('record').textContent =
-            '🎙️ Grabar de nuevo';
-    
-    
-          $('recordStatus').textContent =
-            `Grabación lista · ${
-              (state.blob.size / 1024).toFixed(1)
-            } KB`;
-    
-        };
-    
-    
-        /*
-          Creamos fragmentos cada 250ms.
-          Es más confiable entre navegadores.
-        */
-    
-        recorder.start(250);
-    
-    
-        $('record').textContent =
-          '⏹️ Detener';
-    
-    
+  
+        state.audio = URL.createObjectURL(state.blob);
+  
+        $('preview').src = state.audio;
+        $('preview').load();
+        $('preview').classList.remove('hidden');
+  
+        $('record').textContent = '🎙️ Grabar de nuevo';
         $('recordStatus').textContent =
-          'Grabando…';
-    
-    
-        /*
-          Máximo 60 segundos.
-        */
-    
-        setTimeout(() => {
-    
-          if (
-            recorder &&
-            recorder.state === 'recording'
-          ) {
-    
-            recorder.stop();
-    
-          }
-    
-        }, 60000);
-    
-    
-      }
-    
-      catch (error) {
-    
-        console.error(
-          'Error de micrófono:',
-          error
-        );
-    
-    
-        $('recordStatus').textContent =
-          'No se pudo acceder al micrófono.';
-    
-      }
-    
-    };
-    
-    
-    /* =========================================================
-       CONSEJO EMOCIONAL
-    ========================================================= */
-    
-    $('advice').onclick = () => {
-    
-      if (
-        !state.emotion ||
-        !state.intensity
-      ) {
-    
-        toast(
-          'Elige emoción e intensidad primero.'
-        );
-    
-        return;
-    
-      }
-    
-    
-      const emotion =
-        E.find(
-          item =>
-            item[0] === state.emotion
-        );
-    
-    
-      const advice =
-        A[state.emotion];
-    
-    
-      $('adviceEmoji').textContent =
-        emotion[1];
-    
-    
-      $('adviceTitle').textContent =
-        advice[0];
-    
-    
-      $('adviceText').textContent =
-        advice[1];
-    
-    
-      $('adviceTip').textContent =
-        '💡 ' + advice[2];
-    
-    
-      $('adviceBox')
-        .classList
-        .remove('hidden');
-    
-    };
-    
-    
-    /* =========================================================
-       GUARDAR EMOCIÓN
-    ========================================================= */
-    
-    $('save').onclick = async () => {
-    
-      if (
-        !selectedChild ||
-        !state.emotion ||
-        !state.intensity
-      ) {
-    
-        return toast(
-          'Completa la emoción primero.'
-        );
-    
-      }
-    
-    
-      const formData =
-        new FormData();
-    
-    
-      formData.append(
-        'childId',
-        selectedChild
-      );
-    
-    
-      formData.append(
-        'emotion',
-        state.emotion
-      );
-    
-    
-      formData.append(
-        'intensity',
-        state.intensity
-      );
-    
-    
-      formData.append(
-        'story',
-        $('story').value.trim()
-      );
-    
-    
-      /*
-        AUDIO
-      */
-    
-      if (state.blob) {
-    
-        let extension = 'webm';
-    
-    
-        if (
-          state.blob.type.includes('mp4')
-        ) {
-    
-          extension = 'm4a';
-    
-        }
-    
-        else if (
-          state.blob.type.includes('ogg')
-        ) {
-    
-          extension = 'ogg';
-    
-        }
-    
-    
-        formData.append(
-          'audio',
-          state.blob,
-          `emoti-${Date.now()}.${extension}`
-        );
-    
-      }
-    
-    
-      try {
-    
-        await api(
-          '/emotions',
-          {
-            method: 'POST',
-            body: formData
-          }
-        );
-    
-    
-        toast(
-          '✓ ¡Emoción guardada en la base de datos!'
-        );
-    
-    
-        /*
-          Limpiar formulario
-        */
-    
-        $('story').value = '';
-    
-    
-        state = {
-          emotion: null,
-          intensity: null,
-          audio: null,
-          blob: null
-        };
-    
-    
-        $('preview').pause();
-    
-        $('preview').removeAttribute('src');
-    
-        $('preview')
-          .classList
-          .add('hidden');
-    
-    
-        $('record').textContent =
-          '🎙️ Grabar';
-    
-    
-        $('recordStatus').textContent =
-          'Hasta 60 segundos.';
-    
-    
-        $('adviceBox')
-          .classList
-          .add('hidden');
-    
-    
-        $('intensityBox')
-          .classList
-          .add('hidden');
-    
-    
-        document
-          .querySelectorAll(
-            '.emotion,.level'
-          )
-          .forEach(
-            item =>
-              item.classList.remove(
-                'selected'
-              )
-          );
-    
-    
-        /*
-          Actualización inmediata.
-          No esperamos los 10 segundos.
-        */
-    
-        if (selectedFamily) {
-    
-          await refreshFamilyData(false);
-    
-        }
-    
-      }
-    
-      catch (error) {
-    
-        console.error(error);
-    
-        toast(
-          'No se pudo guardar: ' +
-          error.message
-        );
-    
-      }
-    
-    };
-    
-    
-    /* =========================================================
-       FAMILIAS / NIÑOS
-    ========================================================= */
-    
-    async function loadFamilies() {
-    
-      try {
-    
-        families =
-          await api('/families');
-    
-    
-        /*
-          Verificar si la familia almacenada
-          todavía existe.
-        */
-    
-        const validFamily =
-          families.some(
-            family =>
-              Number(family.id) ===
-              Number(selectedFamily)
-          );
-    
-    
-        if (!validFamily) {
-    
-          selectedFamily = null;
-    
-          localStorage.removeItem(
-            'emoti_selected_family'
-          );
-    
-        }
-    
-    
-        const options =
-          '<option value="">Selecciona una familia</option>' +
-    
-          families
-            .map(
-              family => `
-                <option value="${family.id}">
-                  ${escapeHtml(family.name)}
-                  ·
-                  ${escapeHtml(family.parent_name)}
-                </option>
-              `
-            )
-            .join('');
-    
-    
-        $('familySelect').innerHTML =
-          options;
-    
-    
-        $('setupFamily').innerHTML =
-          options;
-    
-    
-        if (selectedFamily) {
-    
-          $('familySelect').value =
-            String(selectedFamily);
-    
-          $('setupFamily').value =
-            String(selectedFamily);
-    
-        }
-    
-    
-        /*
-          Lista de familias
-        */
-    
-        $('familiesList').innerHTML =
-    
-          families
-            .map(
-              family => `
-                <div class="listItem">
-    
-                  <b>
-                    ${escapeHtml(family.name)}
-                  </b>
-    
-                  <div class="mut">
-    
-                    Adulto:
-                    ${escapeHtml(
-                      family.parent_name
-                    )}
-    
-                    ${
-                      family.parent_email
-                        ?
-                        ' · ' +
-                        escapeHtml(
-                          family.parent_email
-                        )
-                        :
-                        ''
-                    }
-    
-                  </div>
-    
-                </div>
-              `
-            )
-            .join('')
-    
-          ||
-    
-          '<div class="mut">Aún no hay familias.</div>';
-    
-    
-        /*
-          Cargar todos los niños
-        */
-    
-        let childOptions =
-          '<option value="">Selecciona un niño</option>';
-    
-    
-        for (
-          const family of families
-        ) {
-    
-          const children =
-            await api(
-              '/families/' +
-              family.id +
-              '/children'
-            );
-    
-    
-          childOptions +=
-            children
-              .map(
-                child => `
-                  <option
-                    data-family-id="${family.id}"
-                    value="${child.id}"
-                  >
-                    ${child.avatar || '🧒'}
-                    ${escapeHtml(child.name)}
-                    ·
-                    ${escapeHtml(family.name)}
-                  </option>
-                `
-              )
-              .join('');
-    
-        }
-    
-    
-        $('childSelect').innerHTML =
-          childOptions;
-    
-    
-        /*
-          Restaurar niño seleccionado
-        */
-    
-        const childStillExists =
-          selectedChild &&
-          [
-            ...$('childSelect').options
-          ]
-            .some(
-              option =>
-                Number(option.value) ===
-                Number(selectedChild)
-            );
-    
-    
-        if (childStillExists) {
-    
-          $('childSelect').value =
-            String(selectedChild);
-    
-          localStorage.setItem(
-            'emoti_selected_child',
-            String(selectedChild)
-          );
-    
-        }
-    
-        else {
-    
-          selectedChild = null;
-    
-          localStorage.removeItem(
-            'emoti_selected_child'
-          );
-    
-        }
-    
-    
-        $('childFlow')
-          .classList
-          .toggle(
-            'hidden',
-            !selectedChild
-          );
-    
-    
-        /*
-          Restaurar panel familiar
-        */
-    
-        if (selectedFamily) {
-    
-          await refreshFamilyData(false);
-    
-        }
-    
-        else {
-    
-          $('familySummary')
-            .classList
-            .add('hidden');
-    
-    
-          $('selectedFamilyBadge')
-            .classList
-            .add('hidden');
-    
-        }
-    
-      }
-    
-      catch (error) {
-    
-        console.error(error);
-    
-        toast(
-          'No hay conexión con el servidor o la base de datos.'
-        );
-    
-      }
-    
-    }
-    
-    
-    /* =========================================================
-       DETECTAR SI HAY AUDIO REPRODUCIÉNDOSE
-    ========================================================= */
-    
-    function isAnyAudioPlaying() {
-    
-      const audios =
-        document.querySelectorAll(
-          '#history audio'
-        );
-    
-    
-      return [...audios].some(
-        audio =>
-          !audio.paused &&
-          !audio.ended
-      );
-    
-    }
-    
-    
-    /* =========================================================
-       ACTUALIZAR PANEL FAMILIAR
-    ========================================================= */
-    
-    async function refreshFamilyData(
-      showToast = true
-    ) {
-    
-      if (!selectedFamily) {
-        return;
-      }
-    
-    
+          `Grabación lista · ${(state.blob.size / 1024).toFixed(1)} KB`;
+      };
+  
       /*
         IMPORTANTE:
-        Si un audio está reproduciéndose,
-        NO reconstruimos la bitácora.
+        En iOS no usamos timeslice (start(250)).
+        Safari genera MP4 más confiable con start() simple.
       */
-    
-      if (isAnyAudioPlaying()) {
-    
-        console.log(
-          'EMOTI: actualización pausada porque hay audio reproduciéndose'
-        );
-    
-        return;
-    
-      }
-    
-    
-      try {
-    
-        const [children, records] =
-          await Promise.all([
-    
-            api(
-              '/families/' +
-              selectedFamily +
-              '/children'
-            ),
-    
-            api(
-              '/families/' +
-              selectedFamily +
-              '/emotions'
-            )
-    
-          ]);
-    
-    
-        const family =
-          families.find(
-            item =>
-              Number(item.id) ===
-              Number(selectedFamily)
-          );
-    
-    
-        if (family) {
-    
-          $('selectedFamilyBadge')
-            .textContent =
-            '🏠 Familia: ' +
-            family.name;
-    
-    
-          $('selectedFamilyBadge')
-            .classList
-            .remove('hidden');
-    
+      recorder.start();
+  
+      $('record').textContent = '⏹️ Detener';
+      $('recordStatus').textContent = 'Grabando…';
+  
+      setTimeout(() => {
+        if(recorder && recorder.state === 'recording'){
+          recorder.stop();
         }
-    
-    
-        $('familySummary')
-          .classList
-          .remove('hidden');
-    
-    
-        /*
-          KPIs
-        */
-    
-        $('fc').textContent =
-          children.length;
-    
-    
-        $('fr').textContent =
-          records.length;
-    
-    
-        $('fa').textContent =
-          records.filter(
-            record =>
-              record.has_audio ||
-              record.audio_path
-          ).length;
-    
-    
-        /*
-          Niños de la familia
-        */
-    
-        $('childrenList').innerHTML =
-    
-          children
-            .map(
-              child => `
-                <span class="chip">
-                  ${child.avatar || '🧒'}
-                  ${escapeHtml(child.name)}
-                </span>
-              `
-            )
-            .join(' ')
-    
-          ||
-    
-          '<span class="mut">Sin niños</span>';
-    
-    
-        /*
-          HISTORIAL
-        */
-    
-        $('history').innerHTML =
-    
-          records
-            .map(record => {
-    
-              const emotion =
-                E.find(
-                  item =>
-                    item[0] ===
-                    record.emotion
-                );
-    
-    
-              const dateObject =
-                new Date(
-                  record.created_at
-                );
-    
-    
-              let date =
-                dateObject.toLocaleDateString(
-                  'es-CL',
-                  {
-                    weekday: 'long',
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric'
-                  }
-                );
-    
-    
-              date =
-                date.charAt(0).toUpperCase() +
-                date.slice(1);
-    
-    
-              const time =
-                dateObject.toLocaleTimeString(
-                  'es-CL',
-                  {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  }
-                );
-    
-    
-              /*
-                AUDIO:
-                para registros nuevos usamos
-                /api/emotions/:id/audio
-              */
-    
-              let audioHtml = '';
-    
-    
-              if (
-                record.has_audio
-              ) {
-    
-                audioHtml = `
-                  <audio
-                    class="audio"
-                    controls
-                    preload="metadata"
-                    src="/api/emotions/${record.id}/audio"
-                  ></audio>
-                `;
-    
-              }
-    
-              /*
-                Compatibilidad con registros antiguos.
-              */
-    
-              else if (
-                record.audio_path
-              ) {
-    
-                audioHtml = `
-                  <audio
-                    class="audio"
-                    controls
-                    preload="metadata"
-                    src="${record.audio_path}"
-                  ></audio>
-                `;
-    
-              }
-    
-    
-              return `
-                <div class="listItem">
-    
-                  <div class="listHead">
-    
-                    <div class="big">
-                      ${
-                        emotion
-                          ?
-                          emotion[1]
-                          :
-                          '🙂'
-                      }
-                    </div>
-    
-                    <div class="grow">
-    
-                      <div class="historyDate">
-                        ${date}
-                      </div>
-    
-                      <div class="historyTime">
-                        ${time}
-                      </div>
-    
-                      <div class="historySentence">
-    
-                        ${escapeHtml(
-                          record.child_name
-                        )}
-    
-                        se siente
-    
-                        ${
-                          emotion
-                            ?
-                            escapeHtml(
-                              emotion[2]
-                                .toLowerCase()
-                            )
-                            :
-                            escapeHtml(
-                              record.emotion
-                            )
-                        }
-    
-                      </div>
-    
-                      <div class="historyEmotion">
-    
-                        Intensidad
-                        ${record.intensity}/5
-    
-                      </div>
-    
-                    </div>
-    
+      }, 60000);
+  
+    } catch(error){
+      console.error('Error de grabación:', error);
+      $('recordStatus').textContent = 'No se pudo acceder al micrófono.';
+      toast('No pudimos usar el micrófono.');
+    }
+  };
+  
+  $('advice').onclick = () => {
+    if(!state.emotion || !state.intensity){
+      toast('Elige emoción e intensidad primero.');
+      return;
+    }
+  
+    const emotion = E.find(item => item[0] === state.emotion);
+    const advice = A[state.emotion];
+  
+    $('adviceEmoji').textContent = emotion[1];
+    $('adviceTitle').textContent = advice[0];
+    $('adviceText').textContent = advice[1];
+    $('adviceTip').textContent = '💡 ' + advice[2];
+    $('adviceBox').classList.remove('hidden');
+  };
+  
+  $('save').onclick = async () => {
+    if(!selectedChild || !state.emotion || !state.intensity){
+      return toast('Completa la emoción primero.');
+    }
+  
+    const formData = new FormData();
+  
+    formData.append('childId', selectedChild);
+    formData.append('emotion', state.emotion);
+    formData.append('intensity', state.intensity);
+    formData.append('story', $('story').value.trim());
+  
+    if(state.blob){
+      let extension = 'webm';
+  
+      if(state.blob.type.includes('mp4')){
+        extension = 'm4a';
+      } else if(state.blob.type.includes('ogg')){
+        extension = 'ogg';
+      }
+  
+      formData.append(
+        'audio',
+        state.blob,
+        `emoti-${Date.now()}.${extension}`
+      );
+    }
+  
+    try{
+      await api('/emotions', {
+        method:'POST',
+        body:formData
+      });
+  
+      toast('✓ ¡Emoción guardada en la base de datos!');
+  
+      $('story').value = '';
+  
+      state.emotion = null;
+      state.intensity = null;
+      state.blob = null;
+  
+      resetPreviewAudio();
+  
+      $('record').textContent = '🎙️ Grabar';
+      $('recordStatus').textContent = 'Hasta 60 segundos.';
+      $('adviceBox').classList.add('hidden');
+      $('intensityBox').classList.add('hidden');
+  
+      document.querySelectorAll('.emotion,.level')
+        .forEach(item => item.classList.remove('selected'));
+  
+      if(selectedFamily){
+        await refreshFamilyData(false);
+      }
+  
+    } catch(error){
+      console.error(error);
+      toast('No se pudo guardar: ' + error.message);
+    }
+  };
+  
+  async function loadFamilies(){
+    try{
+      families = await api('/families');
+  
+      const validFamily = families.some(
+        family => Number(family.id) === Number(selectedFamily)
+      );
+  
+      if(!validFamily){
+        selectedFamily = null;
+        localStorage.removeItem('emoti_selected_family');
+      }
+  
+      const options =
+        '<option value="">Selecciona una familia</option>' +
+        families.map(family => `
+          <option value="${family.id}">
+            ${escapeHtml(family.name)} · ${escapeHtml(family.parent_name)}
+          </option>
+        `).join('');
+  
+      $('familySelect').innerHTML = options;
+      $('setupFamily').innerHTML = options;
+  
+      if(selectedFamily){
+        $('familySelect').value = String(selectedFamily);
+        $('setupFamily').value = String(selectedFamily);
+      }
+  
+      $('familiesList').innerHTML =
+        families.map(family => `
+          <div class="listItem">
+            <b>${escapeHtml(family.name)}</b>
+            <div class="mut">
+              Adulto: ${escapeHtml(family.parent_name)}
+              ${family.parent_email ? ' · ' + escapeHtml(family.parent_email) : ''}
+            </div>
+          </div>
+        `).join('')
+        || '<div class="mut">Aún no hay familias.</div>';
+  
+      let childOptions =
+        '<option value="">Selecciona un niño</option>';
+  
+      for(const family of families){
+        const children = await api('/families/' + family.id + '/children');
+  
+        childOptions += children.map(child => `
+          <option
+            data-family-id="${family.id}"
+            value="${child.id}">
+            ${child.avatar || '🧒'} ${escapeHtml(child.name)} · ${escapeHtml(family.name)}
+          </option>
+        `).join('');
+      }
+  
+      $('childSelect').innerHTML = childOptions;
+  
+      const childStillExists =
+        selectedChild &&
+        [...$('childSelect').options].some(
+          option => Number(option.value) === Number(selectedChild)
+        );
+  
+      if(childStillExists){
+        $('childSelect').value = String(selectedChild);
+        localStorage.setItem('emoti_selected_child', String(selectedChild));
+      } else {
+        selectedChild = null;
+        localStorage.removeItem('emoti_selected_child');
+      }
+  
+      $('childFlow').classList.toggle('hidden', !selectedChild);
+  
+      if(selectedFamily){
+        await refreshFamilyData(false);
+      } else {
+        $('familySummary').classList.add('hidden');
+        $('selectedFamilyBadge').classList.add('hidden');
+      }
+  
+    } catch(error){
+      console.error(error);
+      toast('No hay conexión con el servidor o la base de datos.');
+    }
+  }
+  
+  function isAnyAudioPlaying(){
+    return [...document.querySelectorAll('#history audio')]
+      .some(audio => !audio.paused && !audio.ended);
+  }
+  
+  async function refreshFamilyData(showToast = true){
+    if(!selectedFamily) return;
+  
+    /*
+      No reconstruimos la bitácora mientras
+      un audio se está reproduciendo.
+    */
+    if(isAnyAudioPlaying()){
+      return;
+    }
+  
+    try{
+      const [children, records] = await Promise.all([
+        api('/families/' + selectedFamily + '/children'),
+        api('/families/' + selectedFamily + '/emotions')
+      ]);
+  
+      const family = families.find(
+        item => Number(item.id) === Number(selectedFamily)
+      );
+  
+      if(family){
+        $('selectedFamilyBadge').textContent = '🏠 Familia: ' + family.name;
+        $('selectedFamilyBadge').classList.remove('hidden');
+      }
+  
+      $('familySummary').classList.remove('hidden');
+  
+      $('fc').textContent = children.length;
+      $('fr').textContent = records.length;
+      $('fa').textContent = records.filter(
+        record => record.has_audio || record.audio_path
+      ).length;
+  
+      $('childrenList').innerHTML =
+        children.map(child => `
+          <span class="chip">
+            ${child.avatar || '🧒'} ${escapeHtml(child.name)}
+          </span>
+        `).join(' ')
+        || '<span class="mut">Sin niños</span>';
+  
+      $('history').innerHTML =
+        records.map(record => {
+          const emotion = E.find(item => item[0] === record.emotion);
+          const d = new Date(record.created_at);
+  
+          let date = d.toLocaleDateString('es-CL',{
+            weekday:'long',
+            day:'2-digit',
+            month:'long',
+            year:'numeric'
+          });
+  
+          date = date.charAt(0).toUpperCase() + date.slice(1);
+  
+          const time = d.toLocaleTimeString('es-CL',{
+            hour:'2-digit',
+            minute:'2-digit'
+          });
+  
+          let audioHtml = '';
+  
+          if(record.has_audio){
+            audioHtml = `
+              <audio
+                class="audio"
+                controls
+                playsinline
+                preload="metadata"
+                src="/api/emotions/${record.id}/audio">
+              </audio>
+            `;
+          } else if(record.audio_path){
+            audioHtml = `
+              <audio
+                class="audio"
+                controls
+                playsinline
+                preload="metadata"
+                src="${record.audio_path}">
+              </audio>
+            `;
+          }
+  
+          return `
+            <div class="listItem">
+              <div class="listHead">
+                <div class="big">${emotion ? emotion[1] : '🙂'}</div>
+  
+                <div class="grow">
+                  <div class="historyDate">${date}</div>
+                  <div class="historyTime">${time}</div>
+  
+                  <div class="historySentence">
+                    ${escapeHtml(record.child_name)}
+                    se siente
+                    ${
+                      emotion
+                        ? escapeHtml(emotion[2].toLowerCase())
+                        : escapeHtml(record.emotion)
+                    }
                   </div>
-    
-    
-                  ${
-                    record.story
-                      ?
-                      `
-                        <div class="detail">
-                          ${escapeHtml(
-                            record.story
-                          )}
-                        </div>
-                      `
-                      :
-                      ''
-                  }
-    
-    
-                  ${audioHtml}
-    
+  
+                  <div class="historyEmotion">
+                    Intensidad ${record.intensity}/5
+                  </div>
                 </div>
-              `;
-    
-            })
-            .join('')
-    
-          ||
-    
-          '<div class="mut">Aún no hay registros para esta familia.</div>';
-    
-    
-        if (showToast) {
-    
-          toast(
-            '✓ Historial actualizado'
-          );
-    
-        }
-    
+              </div>
+  
+              ${
+                record.story
+                  ? `<div class="detail">${escapeHtml(record.story)}</div>`
+                  : ''
+              }
+  
+              ${audioHtml}
+            </div>
+          `;
+        }).join('')
+        || '<div class="mut">Aún no hay registros para esta familia.</div>';
+  
+      if(showToast){
+        toast('✓ Historial actualizado');
       }
-    
-      catch (error) {
-    
-        console.error(
-          'Error actualizando familia:',
-          error
-        );
-    
-      }
-    
+  
+    } catch(error){
+      console.error('Error actualizando familia:', error);
     }
-    
-    
-    /* =========================================================
-       ACTUALIZACIÓN AUTOMÁTICA
-    ========================================================= */
-    
-    function startFamilyRefresh() {
-    
-      stopFamilyRefresh();
-    
-    
-      /*
-        Actualización inmediata al entrar.
-      */
-    
-      if (selectedFamily) {
-    
+  }
+  
+  function startFamilyRefresh(){
+    stopFamilyRefresh();
+  
+    if(selectedFamily){
+      refreshFamilyData(false);
+    }
+  
+    familyRefreshTimer = setInterval(() => {
+      if(
+        !$('family').classList.contains('hidden') &&
+        selectedFamily &&
+        !isAnyAudioPlaying()
+      ){
         refreshFamilyData(false);
-    
       }
-    
-    
-      /*
-        Luego cada 10 segundos.
-      */
-    
-      familyRefreshTimer =
-        setInterval(
-          () => {
-    
-            /*
-              Solamente actualizamos si:
-    
-              - Estamos en la pantalla Familia
-              - Existe familia seleccionada
-              - NO hay audio reproduciéndose
-            */
-    
-            if (
-              !$('family')
-                .classList
-                .contains('hidden')
-              &&
-              selectedFamily
-              &&
-              !isAnyAudioPlaying()
-            ) {
-    
-              refreshFamilyData(false);
-    
-            }
-    
-          },
-          10000
-        );
-    
+    }, 10000);
+  }
+  
+  function stopFamilyRefresh(){
+    if(familyRefreshTimer){
+      clearInterval(familyRefreshTimer);
+      familyRefreshTimer = null;
     }
-    
-    
-    function stopFamilyRefresh() {
-    
-      if (familyRefreshTimer) {
-    
-        clearInterval(
-          familyRefreshTimer
-        );
-    
-        familyRefreshTimer = null;
-    
-      }
-    
+  }
+  
+  $('createFamily').onclick = async () => {
+    try{
+      await api('/families',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          name:$('fname').value,
+          parentName:$('pname').value,
+          parentEmail:$('pemail').value,
+          pin:$('fpin').value || '1234'
+        })
+      });
+  
+      toast('✓ Familia creada');
+  
+      $('fname').value = '';
+      $('pname').value = '';
+      $('pemail').value = '';
+  
+      await loadFamilies();
+  
+    } catch(error){
+      toast(error.message);
     }
-    
-    
-    /* =========================================================
-       CREAR FAMILIA
-    ========================================================= */
-    
-    $('createFamily').onclick =
-    async () => {
-    
-      try {
-    
-        await api(
-          '/families',
-          {
-            method: 'POST',
-    
-            headers: {
-              'Content-Type':
-                'application/json'
-            },
-    
-            body:
-              JSON.stringify({
-    
-                name:
-                  $('fname').value,
-    
-                parentName:
-                  $('pname').value,
-    
-                parentEmail:
-                  $('pemail').value,
-    
-                pin:
-                  $('fpin').value ||
-                  '1234'
-    
-              })
-          }
-        );
-    
-    
-        toast(
-          '✓ Familia creada'
-        );
-    
-    
-        $('fname').value = '';
-    
-        $('pname').value = '';
-    
-        $('pemail').value = '';
-    
-    
-        await loadFamilies();
-    
-      }
-    
-      catch (error) {
-    
-        toast(
-          error.message
-        );
-    
-      }
-    
-    };
-    
-    
-    /* =========================================================
-       CREAR NIÑO
-    ========================================================= */
-    
-    $('createChild').onclick =
-    async () => {
-    
-      try {
-    
-        await api(
-          '/children',
-          {
-            method: 'POST',
-    
-            headers: {
-              'Content-Type':
-                'application/json'
-            },
-    
-            body:
-              JSON.stringify({
-    
-                familyId:
-                  Number(
-                    $('setupFamily').value
-                  ),
-    
-                name:
-                  $('cname').value,
-    
-                birthYear:
-                  Number(
-                    $('cyear').value
-                  ) || null,
-    
-                avatar:
-                  $('avatar').value
-    
-              })
-          }
-        );
-    
-    
-        toast(
-          '✓ Niño agregado'
-        );
-    
-    
-        selectedFamily =
-          Number(
-            $('setupFamily').value
-          ) ||
-          selectedFamily;
-    
-    
-        if (selectedFamily) {
-    
-          localStorage.setItem(
-            'emoti_selected_family',
-            String(selectedFamily)
-          );
-    
-        }
-    
-    
-        $('cname').value = '';
-    
-        $('cyear').value = '';
-    
-    
-        await loadFamilies();
-    
-      }
-    
-      catch (error) {
-    
-        toast(
-          error.message
-        );
-    
-      }
-    
-    };
-    
-    
-    /* =========================================================
-       SELECCIONAR FAMILIA
-    ========================================================= */
-    
-    $('familySelect').onchange =
-    async () => {
-    
+  };
+  
+  $('createChild').onclick = async () => {
+    try{
+      await api('/children',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          familyId:Number($('setupFamily').value),
+          name:$('cname').value,
+          birthYear:Number($('cyear').value) || null,
+          avatar:$('avatar').value
+        })
+      });
+  
+      toast('✓ Niño agregado');
+  
       selectedFamily =
-        Number(
-          $('familySelect').value
-        ) ||
-        null;
-    
-    
-      if (selectedFamily) {
-    
+        Number($('setupFamily').value) ||
+        selectedFamily;
+  
+      if(selectedFamily){
         localStorage.setItem(
           'emoti_selected_family',
           String(selectedFamily)
         );
-    
-    
-        $('setupFamily').value =
-          String(selectedFamily);
-    
       }
-    
-      else {
-    
-        localStorage.removeItem(
-          'emoti_selected_family'
-        );
-    
-    
-        $('familySummary')
-          .classList
-          .add('hidden');
-    
-    
-        $('selectedFamilyBadge')
-          .classList
-          .add('hidden');
-    
-    
-        stopFamilyRefresh();
-    
-        return;
-    
-      }
-    
-    
-      await refreshFamilyData(true);
-    
-      startFamilyRefresh();
-    
-    };
-    
-    
-    /* =========================================================
-       CARGA INICIAL
-    ========================================================= */
-    
-    loadFamilies();
-    
-    </script>  
-</body></html>
+  
+      $('cname').value = '';
+      $('cyear').value = '';
+  
+      await loadFamilies();
+  
+    } catch(error){
+      toast(error.message);
+    }
+  };
+  
+  $('familySelect').onchange = async () => {
+    selectedFamily =
+      Number($('familySelect').value) ||
+      null;
+  
+    if(selectedFamily){
+      localStorage.setItem(
+        'emoti_selected_family',
+        String(selectedFamily)
+      );
+  
+      $('setupFamily').value =
+        String(selectedFamily);
+    } else {
+      localStorage.removeItem('emoti_selected_family');
+      $('familySummary').classList.add('hidden');
+      $('selectedFamilyBadge').classList.add('hidden');
+      stopFamilyRefresh();
+      return;
+    }
+  
+    await refreshFamilyData(true);
+    startFamilyRefresh();
+  };
+  
+  loadFamilies();
+  </script></body></html>
   
