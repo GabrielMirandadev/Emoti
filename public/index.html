@@ -43,7 +43,16 @@
     .adultEmotionGrid{grid-template-columns:repeat(3,1fr)}
   }
   
-  </style><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  
+#adviceText{white-space:pre-line;line-height:1.6}
+#adviceTip{white-space:pre-line;line-height:1.6}
+.adultHelpAlert{
+  margin-top:12px;padding:14px;border-radius:16px;
+  background:#FFF1CC;border:2px solid #FFBC08;
+  color:#654D00;font-weight:900;font-size:16px;line-height:1.4
+}
+
+</style><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   </head><body><div class="app">
   <div class="logo"><img src="logo.png" alt="EMOTI" style="width: 30%; height: 30%;"><span>RECONOCE · REGULA · CONECTA</span></div>
   <div class="nav"><button id="nChild" class="active">🌈 Niño</button><button id="nFamily">👨‍👩‍👧 Familias</button><button id="nSetup">⚙️ Configurar</button></div>
@@ -52,7 +61,7 @@
   <section id="child">
   <div class="card"><h1 id="childGreeting">¿Cómo está tu corazón?</h1><p class="sub">Elige una emoción y cuéntanos un poquito. No hay emociones buenas o malas.</p><div class="field"><label>¿Quién está usando EMOTI?</label><select id="childSelect"><option value="">Selecciona un niño</option></select></div></div>
   <div id="childFlow" class="card hidden"><div class="sectionTitle">1 · ¿Qué emoción sientes?</div><div class="grid" id="emotions"></div><div id="intensityBox" class="hidden"><div class="sectionTitle">2 · ¿Qué tan fuerte es?</div><div class="levels" id="levels"></div><div class="sectionTitle">3 · Cuéntame un poquito</div><textarea id="story" style="width: 100%;" placeholder="Puedes escribir qué pasó..."></textarea><div class="field"><label>🎙️ O graba tu voz</label><button class="secondary" id="record">🎙️ Grabar</button><div id="recordStatus" class="status">Hasta 60 segundos.</div><audio id="preview" class="audio hidden" controls></audio></div><button class="primary" id="advice">Ver mi consejo</button></div></div>
-  <div id="adviceBox" class="card hidden"><div class="big" id="adviceEmoji"></div><h2 id="adviceTitle"></h2><p id="adviceText" class="sub"></p><div class="detail" id="adviceTip"></div><button class="primary" style="margin-top:12px" id="save">✓ Guardar mi emoción</button></div>
+  <div id="adviceBox" class="card hidden"><div class="big" id="adviceEmoji"></div><h2 id="adviceTitle"></h2><p id="adviceText" class="sub"></p><div class="detail" id="adviceTip"></div><div id="adultHelpAlert" class="adultHelpAlert hidden">🧑‍🧑‍🧒 Busca a un adulto para que te ayude</div><button class="primary" style="margin-top:12px" id="save">✓ Guardar mi emoción</button></div>
   </section>
   
   <section id="family" class="hidden">
@@ -214,32 +223,100 @@
   ];
   
   const A = {
-    feliz:[
-      '¡Qué alegría!',
-      'Tu alegría también merece ser escuchada.',
-      'Piensa en qué hizo especial este momento y compártelo con alguien.'
-    ],
-    triste:[
-      'Puedes estar triste',
-      'No tienes que esconder una pena.',
-      'Busca un abrazo y cuéntale a alguien qué pasó.'
-    ],
-    enojo:[
-      'Tu enojo tiene algo que decir',
-      'Puede aparecer cuando algo nos molesta o parece injusto.',
-      'Respira, aléjate si es seguro y después explica qué necesitas.'
-    ],
-    miedo:[
-      'El miedo intenta cuidarte',
-      'Primero revisa si estás seguro ahora.',
-      'Busca a un adulto de confianza y cuéntale qué te asusta.'
-    ],
-    nervioso:[
-      'Vamos más despacio',
-      'Tu mente puede ir muy rápido cuando estás ansioso.',
-      'Pon los pies en el suelo y respira entrando en 4 y soltando en 6.'
-    ]
-  };
+  feliz:[
+    `Guarda este momento feliz`,
+    `La alegría crece cuando la notamos y la compartimos.
+
+Paso 1: Detente
+Quédate quieto unos segundos y disfruta cómo se siente.
+
+Paso 2: Recuérdalo
+Piensa: ¿qué pasó y qué detalle quiero guardar en mi memoria?
+
+Paso 3: Compártelo
+Cuéntaselo a alguien o dale las gracias a quien fue parte de este momento.`,
+    `💡 Detente, recuerda un detalle especial y comparte tu alegría con alguien, agradecer hará que esas experiencias vuelvan.`
+  ],
+  triste:[
+    `Tristeza que merece compañía`,
+    `No tienes que esconderla ni hacer que desaparezca rápido, la tristeza es una emoción que nos permite cuidarnos.
+
+Paso 1: Comienza a repetir lo siguiente
+“Estoy triste porque…”
+
+Paso 2: Pide lo que necesitas
+Busca a un adulto de confianza y dile:
+
+“Necesito que me escuches”.
+“Necesito que te quedes conmigo”.
+“Quiero un abrazo”.
+
+El abrazo debe ser una opción, no una obligación, solo si lo quieres.
+
+Paso 3: Cuídate con algo pequeño
+Elige una algo sencillo: tomar agua, dibujar lo que pasó, sentarte junto a alguien o realizar una actividad tranquila que te guste.`,
+    `💡 Di por qué estás triste, pide compañía y elige una pequeña acción que te cuide.`
+  ],
+  enojo:[
+    `Primero pausa; después habla`,
+    `Bajada: Puedes sentir enojo sin lastimarte ni lastimar a otros.
+
+Paso 1: Detén tu cuerpo
+Deja quietas tus manos y tus pies. Aléjate un poco de la situación si puedes hacerlo de manera segura.
+
+Paso 2: Baja la intensidad
+Toma aire suavemente por la nariz contando 1–2–3 y suéltalo lentamente contando 1–2–3–4. Repítelo cinco veces.
+
+Paso 3: Explica lo que necesitas
+Cuando sientas menos enojo, di:
+
+“Me enojé cuando ____”.
+“Necesito ____”.`,
+    `💡 Detén tu cuerpo, respira lentamente y después explica qué pasó y qué necesitas.
+Si es mucho tu enojo busca rápidamente a un adulto que te ayude a protegerte.`
+  ],
+  miedo:[
+    `Primero sentirme seguro; después valentía`,
+    `El miedo es una alarma. Revisemos si existe peligro ahora.
+
+Paso 1: Revisa
+Pregúntate: “¿Estoy en peligro o alguien me está haciendo daño?”
+
+Paso 2: Busca seguridad
+Si la respuesta es “sí” o no estás seguro:
+
+Aléjate del lugar y busca inmediatamente a un adulto de confianza.
+
+Paso 3: Si estás seguro, da un pasito
+Si un adulto confirma que la situación es segura, cuéntale qué te asusta y elijan juntos el paso más pequeño que puedas intentar.
+
+No tienes que hacerlo todo de una vez.`,
+    `💡 Revisa si estás seguro. Si hay peligro, busca ayuda; si estás seguro, da un pequeño paso acompañado.`
+  ],
+  nervioso:[
+    `Vamos paso a paso`,
+    `Estar nervioso no significa que algo malo vaya a pasar.
+
+Paso 1: Recuérdale a tu cuerpo donde estás.
+Pon ambos pies en el suelo, baja los hombros, mueve los brazos y nota que estás aquí.
+
+Paso 2: Respira suavemente
+Toma aire por la nariz contando 1–2–3 y suéltalo contando 1–2–3–4. Repítelo cinco veces, sin llenar demasiado los pulmones.
+
+Paso 3: Nombra lo que te preocupa
+Completa:
+
+“Me preocupa que ____”.
+
+Paso 4: Elige algo que puedas hacer
+Pregúntate:
+
+“¿Qué puedo hacer ahora?”
+
+Puedes practicar, preparar algo, hacer una pregunta o pedir ayuda.`,
+    `💡 Pon los pies en el suelo, respira lentamente, nombra tu preocupación y elige un pequeño paso.`
+  ]
+};
   
   const $ = id => document.getElementById(id);
   
@@ -323,6 +400,7 @@
         button.classList.add('selected');
         $('intensityBox').classList.remove('hidden');
         $('adviceBox').classList.add('hidden');
+        if($('adultHelpAlert')) $('adultHelpAlert').classList.add('hidden');
       };
   
       $('emotions').appendChild(button);
@@ -530,7 +608,13 @@
     $('adviceEmoji').textContent = emotion[1];
     $('adviceTitle').textContent = advice[0];
     $('adviceText').textContent = advice[1];
-    $('adviceTip').textContent = '💡 ' + advice[2];
+    $('adviceTip').textContent = advice[2];
+
+    const needsAdultHelp =
+      state.intensity >= 4 &&
+      ['miedo','enojo','nervioso'].includes(state.emotion);
+
+    $('adultHelpAlert').classList.toggle('hidden', !needsAdultHelp);
     $('adviceBox').classList.remove('hidden');
   };
   
